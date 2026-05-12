@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#020d18" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="JARVIS" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icon-192.svg" />
+  <link rel="icon" type="image/svg+xml" href="/icon-192.svg" />
+  <title>JARVIS</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="orb-canvas"></canvas>
+
+    <div id="ui">
+      <div id="header">
+        <span id="status-dot"></span>
+        <span id="jarvis-title">J.A.R.V.I.S</span>
+        <span id="subtitle">Just A Rather Very Intelligent System</span>
+      </div>
+
+      <div id="middle">
+        <div id="transcript-box">
+          <div id="transcript-text"></div>
+        </div>
+
+        <div id="response-box">
+          <div id="response-text">Click anywhere to begin.</div>
+        </div>
+      </div>
+
+      <button id="ptt-button" type="button" aria-label="Push to talk">
+        <span id="ptt-icon">🎤</span>
+        <span id="ptt-label">HOLD</span>
+      </button>
+
+      <div id="bottom-bar">
+        <div id="mic-indicator">
+          <div id="mic-ring"></div>
+          <div id="mic-icon">🎤</div>
+        </div>
+        <div id="state-label">STANDBY</div>
+        <div id="version">Loading…</div>
+      </div>
+    </div>
+
+    <div id="click-overlay">
+      <div id="click-message">Tap to activate JARVIS</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

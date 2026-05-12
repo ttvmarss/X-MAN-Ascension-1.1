@@ -1,0 +1,39 @@
+# Environment
+.env
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# Generated SSL certs (auto-regenerated on first run)
+cert.pem
+key.pem
+*.pem
+*.key
+*.crt
+
+# SQLite databases (user data)
+*.db
+*.db-shm
+*.db-wal
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Old Python artifacts (cleaned up)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
