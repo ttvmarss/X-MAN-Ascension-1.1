@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JARVIS</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%2300d4ff' opacity='0.8'/></svg>" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="orb-canvas"></canvas>
+
+    <div id="ui">
+      <div id="header">
+        <span id="status-dot"></span>
+        <span id="jarvis-title">J.A.R.V.I.S</span>
+        <span id="subtitle">Just A Rather Very Intelligent System</span>
+      </div>
+
+      <div id="transcript-box">
+        <div id="transcript-text"></div>
+      </div>
+
+      <div id="response-box">
+        <div id="response-text">Click anywhere to begin.</div>
+      </div>
+
+      <div id="bottom-bar">
+        <div id="mic-indicator">
+          <div id="mic-ring"></div>
+          <div id="mic-icon">🎤</div>
+        </div>
+        <div id="state-label">STANDBY</div>
+        <div id="version">Windows 10 Edition</div>
+      </div>
+    </div>
+
+    <div id="click-overlay">
+      <div id="click-message">Click to activate JARVIS</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

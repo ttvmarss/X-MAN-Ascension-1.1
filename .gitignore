@@ -1,0 +1,39 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+*.egg
+
+# SSL
+*.pem
+*.key
+*.crt
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Data (user-specific)
+*.db
+*.db-shm
+*.db-wal
+
+# Windows
+Thumbs.db
+Desktop.ini
+*.lnk
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
