@@ -1,12 +1,13 @@
 """
 J.A.R.V.I.S. - Iron Man Desktop AI
-Requirements: pip install edge-tts pygame SpeechRecognition pyaudio
+Requirements: pip install edge-tts SpeechRecognition pyaudio
 Offline AI:   install Ollama (ollama.com) then: ollama pull tinyllama
 """
 
 import tkinter as tk
 import threading
 import asyncio
+import ctypes
 import os
 import json
 import urllib.request
@@ -15,20 +16,22 @@ import math
 import time
 import tempfile
 
+# ── Windows MCI audio player (built-in, no extra install) ────────────────────
+_winmm = ctypes.windll.winmm
+
+def _mci_play(path: str):
+    """Play an MP3 using Windows MCI — blocks until done."""
+    safe = path.replace("/", "\\")
+    _winmm.mciSendStringW(f'open "{safe}" type mpegvideo alias _j', None, 0, None)
+    _winmm.mciSendStringW('play _j wait', None, 0, None)
+    _winmm.mciSendStringW('close _j', None, 0, None)
+
 # ── Optional imports ──────────────────────────────────────────────────────────
 try:
     import edge_tts
     EDGE_TTS = True
 except ImportError:
     EDGE_TTS = False
-
-try:
-    import pygame
-    pygame.mixer.pre_init(44100, -16, 2, 2048)
-    pygame.mixer.init()
-    PYGAME = True
-except ImportError:
-    PYGAME = False
 
 try:
     import pyttsx3
@@ -242,7 +245,7 @@ class Jarvis:
 
     # ── TTS ───────────────────────────────────────────────────────────────────
     def _init_tts(self):
-        if PYTTSX and not (EDGE_TTS and PYGAME):
+        if PYTTSX:
             try:
                 self._engine = pyttsx3.init()
                 for v in self._engine.getProperty('voices'):
@@ -260,7 +263,7 @@ class Jarvis:
         self._mute_mic = True
         self._hud.set_state("speaking")
         try:
-            if EDGE_TTS and PYGAME:
+            if EDGE_TTS:
                 asyncio.run(self._edge_speak(text))
             elif self._engine:
                 self._engine.say(text)
@@ -277,11 +280,7 @@ class Jarvis:
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
             path = f.name
         await comm.save(path)
-        pygame.mixer.music.load(path)
-        pygame.mixer.music.play()
-        while pygame.mixer.music.get_busy():
-            await asyncio.sleep(0.05)
-        pygame.mixer.music.unload()
+        await asyncio.get_event_loop().run_in_executor(None, _mci_play, path)
         try:
             os.unlink(path)
         except Exception:
@@ -428,7 +427,7 @@ class Jarvis:
 # ── Entry ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     if not EDGE_TTS:
-        print("[JARVIS] For the best voice: pip install edge-tts pygame")
+        print("[JARVIS] For the best voice: pip install edge-tts")
     if not SR:
         print("[JARVIS] For voice input:    pip install SpeechRecognition pyaudio")
     print("[JARVIS] For offline AI:     install Ollama then: ollama pull tinyllama")
