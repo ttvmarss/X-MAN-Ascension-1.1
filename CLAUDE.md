@@ -1,150 +1,149 @@
-# JARVIS — Windows 10 + iPhone Edition
+# JARVIS — Node.js Edition (Windows 10 + iPhone)
 
-Just A Rather Very Intelligent System. Voice-first AI assistant.
-Runs on a Windows 10 PC, callable from your iPhone (or any phone) on the same WiFi.
+Voice-first AI assistant. **Pure Node.js + browser** — no Python required.
+Free high-quality JARVIS voice using Microsoft Edge's neural voices (no API key).
 
-## What it does
+## What you get
 
-- Voice conversation (continuous on PC, push-to-talk on phone)
-- Reads your Outlook calendar and unread email (Windows Outlook COM)
-- Saves notes and remembers preferences across sessions
-- Builds software via Claude Code subprocess
-- Browses the web, opens apps, plans tasks
-- Audio-reactive Three.js particle orb UI
+- Hands-free voice conversation on your Windows 10 PC
+- The same app on your iPhone over local WiFi (push-to-talk)
+- A British-voiced AI that calls you "sir"
+- An audio-reactive Three.js orb that looks like the MCU JARVIS
+- Real actions: open apps, browse the web, build software via Claude Code, remember things, manage tasks
+- 100% free voice — Microsoft Edge neural TTS, no API key, no quota
+- Anthropic Claude API key required (pay-as-you-go from Anthropic; not from us)
 
-## Setup (Windows 10 PC)
+## Setup — Windows 10
 
-1. **Run** `setup_windows.bat`
-   Installs Python deps, Whisper STT model, Playwright, frontend, builds the UI.
-2. **Edit** `.env` — add your Anthropic API key. Fish Audio key is optional (falls back to Windows/iOS built-in voice).
-3. **Run** `start_jarvis.bat`
-   Server starts, prints a QR code with your LAN URL.
+1. Install **Node.js 18+** from <https://nodejs.org> (LTS recommended)
+2. Run `setup_windows.bat` — installs deps and builds the frontend
+3. Edit `.env` — paste your Anthropic API key from <https://console.anthropic.com>
+4. Run `start_jarvis.bat`
+5. Open the URL it prints (looks like `https://localhost:8000`) in Chrome or Edge
+6. Click anywhere → allow microphone → start speaking
 
-That's it. Open the URL on your PC, or scan the QR with your iPhone.
+## Use it on your iPhone
 
-## iPhone usage
+1. Make sure your iPhone is on the same WiFi as your PC
+2. Look at the QR code in the JARVIS console window — scan it with your phone camera
+3. Safari opens → it will warn about the certificate (it's self-signed, that's fine)
+   → tap **Show Details → Visit Website → Continue**
+4. Tap **Tap to activate JARVIS** → allow microphone permission
+5. **Hold the big mic button** to talk, **release** to send
+6. Optional: Safari → Share → **Add to Home Screen**. JARVIS launches like a native app.
 
-1. Make sure your iPhone is on the **same WiFi** as the PC.
-2. Scan the QR code printed in the JARVIS console (or type the LAN URL in Safari).
-3. Safari will warn about the self-signed certificate — tap **Show Details → Visit Website → Continue**. (It's your own cert generated locally; nobody else can use it.)
-4. Tap **Tap to activate JARVIS** → allow microphone permission.
-5. **Hold** the big mic button to talk, **release** to send. JARVIS responds with voice.
-6. Optional: **Share → Add to Home Screen** to install JARVIS as a PWA. It launches like a native app.
-
-### Why push-to-talk on iPhone?
-
-iOS Safari's continuous speech recognition is unreliable. JARVIS records audio on your phone, sends it to the PC, and transcribes it locally using `faster-whisper`. Your audio never leaves your network.
+> Windows Firewall: on first start, Windows may ask whether to allow Node.js
+> through the firewall. Click **Allow access** for **Private networks** so
+> your phone can reach the server.
 
 ## How it works
 
 ```
-PC microphone (Chrome)  ─┐
-                          ├─► WebSocket ─► server.py ─► Claude (tool use)
-iPhone mic (Safari) ─────┘                                  │
-   audio blob → /api/transcribe → Whisper → text           │
-                                                            ▼
-Claude tool call → dispatch (build / browse / remember / ...)
-   │
-   ▼
-Response text → Fish Audio TTS → mp3 → WebSocket → playback
+PC mic / phone mic ──► browser ──► WebSocket ──► server.js
+                                                    │
+                                                    ▼
+                                            Claude (tool use)
+                                                    │
+                              ┌─────────────────────┼──────────────┐
+                              ▼                     ▼              ▼
+                         remember          open browser       build_project
+                         add_task          open app           save_note
+                                                              get_time
+                                                    │
+                                                    ▼
+                                  MS Edge neural TTS (free)
+                                                    │
+                                                    ▼
+                                          MP3 audio back to browser
 ```
 
 ## File layout
 
-| File | Purpose |
-|------|---------|
-| `server.py` | FastAPI WebSocket server, Claude tool-use dispatch, HTTPS auto-setup |
-| `transcription.py` | faster-whisper STT for iOS/Safari clients |
-| `net_helper.py` | LAN IP detection, self-signed cert, QR code printing |
-| `tools_schema.py` | Anthropic tool-use schema for all JARVIS actions |
-| `frontend/src/orb.ts` | Three.js audio-reactive particle orb |
-| `frontend/src/voice.ts` | Dual-mode voice: Web Speech API (PC) + MediaRecorder (iOS) |
-| `frontend/src/main.ts` | State machine, WebSocket client, PWA |
-| `memory.py` | SQLite FTS5 long-term memory |
-| `conversation.py` | Three-tier conversation memory (buffer + summary + long-term) |
-| `calendar_access.py` | Outlook COM calendar + JSON fallback |
-| `mail_access.py` | Outlook COM email (read-only) |
-| `notes_access.py` | File-based notes in `~/Documents/JARVIS Notes` |
-| `actions.py` | Windows actions: launch apps, URLs, Claude Code builds |
-| `browser.py` | Playwright web automation |
-| `planner.py` | Multi-step task planning |
-| `work_mode.py` | Persistent Claude Code session management |
-| `screen.py` | Active window awareness via win32gui |
-| `tracking.py` | Task tracking SQLite DB |
-| `suggestions.py` | Proactive time-based suggestions |
-| `learning.py` | Preference tracking |
-| `evolution.py` | Usage stats |
-
-## Configuration (`.env`)
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-...        # required
-FISH_API_KEY=...                     # optional — uses browser TTS if missing
-USER_NAME=Tony                       # what JARVIS calls you
-HOST=0.0.0.0                         # bind LAN (0.0.0.0) or localhost only
-PORT=8000
-USE_HTTPS=auto                       # auto generates cert; "false" for plain HTTP
-WHISPER_MODEL=base.en                # tiny.en / base.en / small.en / medium.en
+```
+server.js              ← main entry: Express + WebSocket + HTTPS
+package.json
+src/
+├── claude.js          ← Anthropic SDK + tool-use loop
+├── tools.js           ← Tool schema definitions
+├── actions.js         ← Windows actions: launch apps, open URLs, spawn builds
+├── tts.js             ← FREE MS Edge neural TTS (JARVIS voice)
+├── transcribe.js      ← Optional Whisper for iOS server-side STT
+├── memory.js          ← SQLite long-term memory + tasks
+├── conversation.js    ← Three-tier conversation memory
+└── net.js             ← LAN IP, SSL cert, QR-code banner
+frontend/              ← Vite + TypeScript + Three.js orb UI
 ```
 
-## Tool-use actions
+## Voice options
 
-Claude returns structured tool calls (no more regex parsing). Available tools:
+Edit `JARVIS_VOICE` in `.env`:
 
-- `build_project` — spawn Claude Code subprocess
-- `browse_web` — open URL or search query in default browser
-- `research_topic` — deep research with HTML report output
-- `add_task` — track a task with priority + optional due time
-- `remember` — store fact/preference for future sessions
-- `save_note` — create a longer note in `~/Documents/JARVIS Notes`
-- `make_plan` — multi-step plan generation
-- `open_app_or_url` — launch a Windows app or URL
-- `connect_to_project` — open Claude Code in an existing directory
+| Voice | Description |
+|-------|-------------|
+| `en-GB-RyanNeural` | **Default.** British male, calm, intelligent — JARVIS-like |
+| `en-GB-ThomasNeural` | Alternative British male |
+| `en-US-GuyNeural` | American male |
+| `en-US-TonyNeural` | American male, deeper |
+| `en-GB-SoniaNeural` | British female |
 
-## Voice modes
+All free, all run through Microsoft Edge's public TTS endpoint.
 
-| Device | Mode | Why |
-|--------|------|-----|
-| Windows + Chrome | Continuous (Web Speech API) | Best UX, hands-free |
-| iPhone + Safari | Push-to-talk (MediaRecorder → Whisper) | iOS Safari can't do reliable continuous STT |
-| Android + Chrome | Continuous | Web Speech API works |
-| Mac + Safari | Push-to-talk | Same iOS Safari limitation |
+## Tools (what JARVIS can actually do)
 
-The frontend auto-detects which mode to use.
+| Tool | Trigger phrase examples |
+|------|------------------------|
+| `remember` | "Remember that I prefer React over Vue" |
+| `recall` | "What do you remember about my project?" |
+| `add_task` | "Add a task to call the dentist tomorrow" |
+| `list_tasks` | "What's on my to-do list?" |
+| `browse_web` | "Search for the best pizza in Austin" |
+| `open_app` | "Open Notepad" / "Launch Spotify" |
+| `build_project` | "Build me a landing page for my band" |
+| `save_note` | "Save a note: meeting at 3pm tomorrow" |
+| `get_time` | "What time is it?" / "What's today's date?" |
 
-## TTS
-
-- **Primary**: Fish Audio API → cinematic JARVIS voice
-- **Fallback**: Browser `speechSynthesis` API
-  - Windows: George (British)
-  - iOS: Daniel (British)
-
-## Troubleshooting
-
-**Phone can't connect**
-- Check the iPhone is on the same WiFi as the PC
-- Windows Firewall: allow Python through Private networks
-- If you see "connection refused", the server isn't running — check the JARVIS Backend window
-
-**iPhone says "site is not secure"**
-- Expected. Tap "Show Details → Visit Website". The cert is self-signed.
-
-**No transcription on iPhone**
-- First request loads the Whisper model (5-10s on first use)
-- Check the console for "[STT] Whisper ready."
-- If faster-whisper failed to install, reinstall: `pip install faster-whisper`
-
-**No voice output**
-- Without Fish API key, uses built-in TTS (Windows George, iOS Daniel)
-- Make sure your phone isn't on silent mode
-
-**Calendar/email empty**
-- Outlook not detected. Either install Outlook, or add events to `~/Documents/JARVIS/calendar.json`
+`build_project` and `connect_to_project` require **Claude Code CLI** on your
+PATH. Install it from <https://claude.ai/code>.
 
 ## Data locations
 
-- Memory DB: `~/Documents/JARVIS/memory.db`
-- Tasks DB: `~/Documents/JARVIS/tasks.db`
+- Memory + tasks DB: `~/Documents/JARVIS/memory.db`
 - Notes: `~/Documents/JARVIS Notes/*.txt`
-- Built projects: `~/Documents/JARVIS Projects/`
-- SSL certs: `cert.pem` + `key.pem` in repo root (auto-generated, gitignored)
+- Projects built by JARVIS: `~/Documents/JARVIS Projects/`
+- Self-signed SSL: `cert.pem` + `key.pem` in the repo root (auto-generated, gitignored)
+
+## iOS speech-to-text (optional)
+
+By default, iPhone uses Safari's `webkitSpeechRecognition` — works on iOS 14.5+.
+
+For more reliable transcription, install Whisper:
+```
+npm install nodejs-whisper
+```
+First request downloads a ~150 MB model. After that, iOS audio is transcribed
+locally on your PC (never leaves your network).
+
+## Troubleshooting
+
+**"Cannot find module 'better-sqlite3'"**
+→ Native module didn't build. Make sure you have a C++ toolchain. On Windows:
+```
+npm install --global windows-build-tools
+```
+Or just install Visual Studio Build Tools with C++ workload.
+
+**Phone can't connect**
+- Same WiFi? Check.
+- Windows Firewall: allow Node.js for Private networks
+- Try the LAN URL (e.g. `https://192.168.x.x:8000`) instead of the QR
+
+**iPhone says "not secure"** — expected. Tap Show Details → Visit Website. The
+cert is your own, generated locally, valid for 5 years.
+
+**No JARVIS voice (only text)** — first synthesis takes ~2 seconds (MS Edge
+TTS connects via WebSocket). If it consistently fails, check your firewall
+isn't blocking outbound 443 from Node.
+
+**Microphone won't activate** — Chrome/Safari require HTTPS for mic permission
+on non-localhost. The auto-generated cert covers this; just accept the warning
+the first time.
