@@ -1,18 +1,17 @@
 /**
- * JARVIS Frontend — Windows 10 Edition
- * State machine: connects WebSocket, drives orb + voice + UI.
+ * JARVIS Frontend — Windows 10 + iPhone Edition
+ * Dual-mode: continuous voice on desktop, push-to-talk on mobile/iOS.
  */
 import { JarvisOrb } from './orb'
-import { VoiceManager } from './voice'
-import type { VoiceState } from './voice'
+import { VoiceManager, detectMode } from './voice'
+import type { VoiceState, VoiceMode } from './voice'
 
-// ── Config ────────────────────────────────────────────────────────────────────
-const WS_HOST = window.location.hostname || 'localhost'
-// Backend runs on 8000 (separate from Vite dev server on 8340)
-// When built and served by the backend directly, use same host/port
-const WS_PORT = import.meta.env.VITE_WS_PORT ? Number(import.meta.env.VITE_WS_PORT) : 8000
-const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss' : 'ws'
-const WS_URL = `${WS_PROTOCOL}://${WS_HOST}:${WS_PORT}/ws`
+// ── URLs (relative to current host so it works on LAN/phone) ─────────────────
+const isSecure = window.location.protocol === 'https:'
+const WS_PROTOCOL = isSecure ? 'wss' : 'ws'
+const HOST = window.location.host
+const WS_URL = `${WS_PROTOCOL}://${HOST}/ws`
+const TRANSCRIBE_URL = `${window.location.origin}/api/transcribe`
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('orb-canvas') as HTMLCanvasElement
@@ -20,6 +19,9 @@ const transcriptEl = document.getElementById('transcript-text') as HTMLElement
 const responseEl = document.getElementById('response-text') as HTMLElement
 const stateLabelEl = document.getElementById('state-label') as HTMLElement
 const clickOverlay = document.getElementById('click-overlay') as HTMLElement
+const clickMessage = document.getElementById('click-message') as HTMLElement
+const pttButton = document.getElementById('ptt-button') as HTMLButtonElement
+const versionEl = document.getElementById('version') as HTMLElement
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let orb: JarvisOrb
@@ -27,7 +29,8 @@ let voice: VoiceManager
 let ws: WebSocket | null = null
 let wsReady = false
 let reconnectTimer: number | null = null
-let pendingTranscript = ''
+let mode: VoiceMode = detectMode()
+let pttHolding = false
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 function connectWS() {
@@ -40,7 +43,6 @@ function connectWS() {
 
   ws.onopen = () => {
     wsReady = true
-    console.log('[JARVIS] WebSocket connected')
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
       reconnectTimer = null
@@ -49,24 +51,24 @@ function connectWS() {
 
   ws.onmessage = async (event: MessageEvent) => {
     if (event.data instanceof ArrayBuffer) {
-      // Binary = TTS audio
       orb.setState('speaking')
       await voice.playAudioBuffer(event.data)
     } else {
-      const msg = JSON.parse(event.data as string)
-      handleServerMessage(msg)
+      try {
+        const msg = JSON.parse(event.data as string)
+        handleServerMessage(msg)
+      } catch (e) {
+        console.warn('Bad message:', event.data)
+      }
     }
   }
 
   ws.onclose = () => {
     wsReady = false
-    console.warn('[JARVIS] WebSocket closed — reconnecting in 3s')
     reconnectTimer = window.setTimeout(connectWS, 3000)
   }
 
-  ws.onerror = (e) => {
-    console.error('[JARVIS] WebSocket error:', e)
-  }
+  ws.onerror = (e) => console.error('WebSocket error:', e)
 }
 
 function sendTranscript(text: string, final: boolean) {
@@ -79,28 +81,22 @@ function handleServerMessage(msg: Record<string, unknown>) {
   const type = msg.type as string
 
   if (type === 'response') {
-    const text = msg.text as string
-    setResponse(text)
+    setResponse(msg.text as string)
     orb.setState('speaking')
     setUIState('speaking')
   } else if (type === 'thinking') {
     orb.setState('thinking')
     setUIState('thinking')
-    setTranscript(pendingTranscript, true)
   } else if (type === 'tts_fallback') {
-    // No audio — use browser TTS as fallback
-    const text = msg.text as string
-    browserTTS(text)
+    browserTTS(msg.text as string)
   } else if (type === 'action') {
     const action = msg.action as string
     const taskId = msg.task_id as string
     showActionNotice(action, taskId)
-  } else if (type === 'pong') {
-    // heartbeat ack
   }
 }
 
-// ── Browser TTS fallback (Windows has built-in voices) ───────────────────────
+// ── Browser TTS fallback (uses Windows George voice, iOS Daniel) ─────────────
 function browserTTS(text: string) {
   if (!('speechSynthesis' in window)) return
   const utt = new SpeechSynthesisUtterance(text)
@@ -108,25 +104,26 @@ function browserTTS(text: string) {
   utt.rate = 0.95
   utt.pitch = 0.85
 
-  // Prefer a British voice if available
   const voices = speechSynthesis.getVoices()
-  const british = voices.find(v => v.lang.startsWith('en-GB') && v.name.toLowerCase().includes('george'))
-    || voices.find(v => v.lang.startsWith('en-GB'))
-    || voices.find(v => v.lang.startsWith('en'))
-
+  const british =
+    voices.find(v => v.name.toLowerCase().includes('daniel')) ||      // iOS
+    voices.find(v => v.name.toLowerCase().includes('george')) ||     // Windows
+    voices.find(v => v.lang === 'en-GB') ||
+    voices.find(v => v.lang.startsWith('en'))
   if (british) utt.voice = british
 
   utt.onstart = () => { orb.setState('speaking'); setUIState('speaking') }
-  utt.onend = () => { orb.setState('listening'); setUIState('listening') }
-
+  utt.onend = () => {
+    if (mode === 'continuous') { orb.setState('listening'); setUIState('listening') }
+    else { orb.setState('idle'); setUIState('idle') }
+  }
+  speechSynthesis.cancel()
   speechSynthesis.speak(utt)
 }
 
 // ── Voice callbacks ───────────────────────────────────────────────────────────
 function onTranscript(text: string, final: boolean) {
   setTranscript(text, final)
-  pendingTranscript = text
-
   if (final && text.trim()) {
     setUIState('thinking')
     orb.setState('thinking')
@@ -135,12 +132,21 @@ function onTranscript(text: string, final: boolean) {
 }
 
 function onVoiceStateChange(state: VoiceState) {
-  if (state === 'listening') {
+  if (state === 'recording') {
+    orb.setState('listening')
+    setUIState('recording')
+  } else if (state === 'listening') {
     orb.setState('listening')
     setUIState('listening')
   } else if (state === 'speaking') {
     orb.setState('speaking')
     setUIState('speaking')
+  } else if (state === 'idle') {
+    orb.setState('idle')
+    setUIState('idle')
+  } else if (state === 'processing') {
+    orb.setState('thinking')
+    setUIState('thinking')
   }
 }
 
@@ -150,8 +156,9 @@ function onAudioLevel(level: number) {
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
 const STATE_LABELS: Record<string, string> = {
-  idle: 'STANDBY',
+  idle: mode === 'push_to_talk' ? 'HOLD TO TALK' : 'STANDBY',
   listening: 'LISTENING',
+  recording: 'RECORDING',
   thinking: 'PROCESSING',
   speaking: 'SPEAKING',
 }
@@ -171,42 +178,96 @@ function setResponse(text: string) {
 
 function showActionNotice(action: string, taskId: string) {
   const notices: Record<string, string> = {
-    build_started: `Build started (ID: ${taskId}). I'll notify you when complete.`,
-    research_started: `Research in progress (ID: ${taskId}).`,
+    build_started: `Build started (#${taskId})`,
+    research_started: `Research in progress (#${taskId})`,
   }
-  const msg = notices[action] || `Action: ${action}`
-  console.log('[JARVIS]', msg)
+  console.log('[JARVIS]', notices[action] || action)
+}
+
+// ── Push-to-talk button (mobile / iOS) ───────────────────────────────────────
+function bindPushToTalk() {
+  if (mode === 'continuous') {
+    pttButton.style.display = 'none'
+    return
+  }
+  pttButton.style.display = 'flex'
+  clickMessage.textContent = 'Tap to begin'
+
+  const start = async (e: Event) => {
+    e.preventDefault()
+    if (pttHolding) return
+    pttHolding = true
+    pttButton.classList.add('active')
+    await voice.startRecording()
+  }
+  const stop = async (e: Event) => {
+    e.preventDefault()
+    if (!pttHolding) return
+    pttHolding = false
+    pttButton.classList.remove('active')
+    await voice.stopRecording(TRANSCRIBE_URL)
+  }
+
+  // Touch (iOS/Android)
+  pttButton.addEventListener('touchstart', start, { passive: false })
+  pttButton.addEventListener('touchend', stop, { passive: false })
+  pttButton.addEventListener('touchcancel', stop, { passive: false })
+
+  // Mouse (desktop fallback)
+  pttButton.addEventListener('mousedown', start)
+  pttButton.addEventListener('mouseup', stop)
+  pttButton.addEventListener('mouseleave', stop)
+}
+
+// ── PWA: register service worker ─────────────────────────────────────────────
+async function registerSW() {
+  if (!('serviceWorker' in navigator)) return
+  try {
+    await navigator.serviceWorker.register('/sw.js')
+  } catch (e) {
+    // Service worker registration failure is non-fatal
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   orb = new JarvisOrb(canvas)
-
   voice = new VoiceManager({
     onTranscript,
     onStateChange: onVoiceStateChange,
     onAudioLevel,
-  })
+  }, mode)
 
-  // Click overlay to unlock audio context (required by browsers)
+  versionEl.textContent = mode === 'continuous' ? 'Desktop' : 'Mobile'
+
+  bindPushToTalk()
+
   clickOverlay.addEventListener('click', async () => {
+    try {
+      await voice.init()
+    } catch (e) {
+      clickMessage.textContent = 'Microphone permission denied'
+      return
+    }
     clickOverlay.classList.add('hidden')
-    await voice.init()
     connectWS()
-    voice.startListening()
-    orb.setState('listening')
-    setUIState('listening')
+
+    if (mode === 'continuous') {
+      voice.startListening()
+      orb.setState('listening')
+      setUIState('listening')
+    } else {
+      orb.setState('idle')
+      setUIState('idle')
+    }
   })
 
-  // Ping heartbeat
   setInterval(() => {
-    if (wsReady && ws) {
-      ws.send(JSON.stringify({ type: 'ping' }))
-    }
+    if (wsReady && ws) ws.send(JSON.stringify({ type: 'ping' }))
   }, 30000)
 
-  // Load voices list (needed for TTS fallback selection)
   speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices()
+  registerSW()
 }
 
 init()

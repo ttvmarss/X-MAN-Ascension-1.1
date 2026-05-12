@@ -4,19 +4,17 @@ color 0B
 
 echo.
 echo  ==========================================
-echo   J.A.R.V.I.S  —  Windows 10 Edition
+echo   J.A.R.V.I.S  —  Windows 10 + iPhone
 echo   Starting up...
 echo  ==========================================
 echo.
 
-:: Check .env exists
 if not exist ".env" (
     echo [ERROR] .env file not found. Run setup_windows.bat first.
     pause
     exit /b 1
 )
 
-:: Check API key is set
 findstr /C:"ANTHROPIC_API_KEY=your-" ".env" >nul
 if %errorlevel% equ 0 (
     echo [WARNING] ANTHROPIC_API_KEY still set to placeholder in .env
@@ -25,55 +23,27 @@ if %errorlevel% equ 0 (
     exit /b 1
 )
 
-:: Build frontend if dist doesn't exist
+:: Build frontend if not already built (or if main.ts changed)
 if not exist "frontend\dist\index.html" (
-    echo [SETUP] Building frontend...
+    echo [BUILD] Building frontend for production...
     cd frontend
     call npm run build
+    if %errorlevel% neq 0 (
+        echo [ERROR] Frontend build failed.
+        cd ..
+        pause
+        exit /b 1
+    )
     cd ..
     echo [OK] Frontend built.
 )
 
-:: Start backend server in a new window (port 8000)
-echo [START] Launching JARVIS backend on port 8000...
-start "JARVIS Backend" cmd /k "python server.py"
-
-:: Start frontend dev server in a new window (port 8340, proxies /ws to 8000)
-echo [START] Launching JARVIS frontend on port 8340...
-start "JARVIS Frontend" cmd /k "cd frontend && npm run dev"
-
-:: Wait 3 seconds for both to start
-timeout /t 3 /nobreak >nul
-
-:: Open Chrome (try different paths)
-echo [START] Opening Chrome...
-set CHROME_PATH=""
-if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
-    set CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe"
-) else if exist "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" (
-    set CHROME_PATH="C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
-) else if exist "%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe" (
-    set CHROME_PATH="%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"
-)
-
-if %CHROME_PATH%=="" (
-    echo [INFO] Chrome not found at default paths. Opening in default browser.
-    start http://localhost:8340
-) else (
-    start "" %CHROME_PATH% "http://localhost:8340"
-)
-
+:: Start backend server (serves both API and UI on the same port over HTTPS)
+echo [START] Launching JARVIS server...
+echo         (it will print your LAN URL + a QR code for your phone)
 echo.
-echo  ==========================================
-echo   JARVIS is running!
-echo.
-echo   Backend:  http://localhost:8340
-echo   UI:       http://localhost:8340
-echo.
-echo   Click anywhere on the page to activate.
-echo   Then speak naturally.
-echo.
-echo   Close this window to stop the launcher.
-echo  ==========================================
-echo.
+
+:: Run in foreground so user sees the QR code
+python server.py
+
 pause
