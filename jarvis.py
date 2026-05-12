@@ -1,273 +1,438 @@
+"""
+J.A.R.V.I.S. - Iron Man Desktop AI
+Requirements: pip install edge-tts pygame SpeechRecognition pyaudio
+Offline AI:   install Ollama (ollama.com) then: ollama pull tinyllama
+"""
+
 import tkinter as tk
 import threading
+import asyncio
 import os
+import json
 import urllib.request
 import urllib.error
-import json
+import math
+import time
+import tempfile
+
+# ── Optional imports ──────────────────────────────────────────────────────────
+try:
+    import edge_tts
+    EDGE_TTS = True
+except ImportError:
+    EDGE_TTS = False
+
+try:
+    import pygame
+    pygame.mixer.pre_init(44100, -16, 2, 2048)
+    pygame.mixer.init()
+    PYGAME = True
+except ImportError:
+    PYGAME = False
 
 try:
     import pyttsx3
-    TTS_OK = True
+    PYTTSX = True
 except ImportError:
-    TTS_OK = False
+    PYTTSX = False
 
 try:
     import speech_recognition as sr
-    SR_OK = True
+    SR = True
 except ImportError:
-    SR_OK = False
+    SR = False
 
-# ── Colors ────────────────────────────────────────────────────────────────
-BG     = "#020b18"
-PANEL  = "#041525"
-ACCENT = "#00cfff"
-GOLD   = "#c8922a"
-GREEN  = "#00ff88"
-DIM    = "#1a3a4a"
-TEXT   = "#b8e8ff"
-WHITE  = "#e8f8ff"
+# ── Theme ─────────────────────────────────────────────────────────────────────
+BG      = "#000812"
+PANEL   = "#00060f"
+CYAN    = "#00d4ff"
+BLUE    = "#0055cc"
+DIM     = "#001f33"
+GOLD    = "#ff8c00"
+GREEN   = "#00ff88"
+WHITE   = "#cceeff"
+GRAY    = "#223344"
 
-OLLAMA_URL  = "http://localhost:11434/api/chat"
-OLLAMA_MODEL = "tinyllama"  # small & fast; swap for llama3 if you have it
+# ── AI config ─────────────────────────────────────────────────────────────────
+OLLAMA_URL   = "http://localhost:11434/api/chat"
+OLLAMA_MODEL = "tinyllama"
+VOICE        = "en-GB-RyanNeural"   # British male — closest to Jarvis
 
 SYSTEM_PROMPT = (
-    "You are J.A.R.V.I.S., the AI assistant from Iron Man. "
-    "You are highly intelligent, witty, and speak formally with subtle dry humor. "
+    "You are J.A.R.V.I.S., Tony Stark's AI from Iron Man. "
+    "Speak with intelligence, formality, and dry wit. "
     "Always address the user as 'sir'. "
-    "Keep responses concise — 1-3 sentences unless more is truly needed."
+    "Be concise — 1 to 3 sentences unless more detail is truly needed."
 )
 
-FALLBACK_REPLIES = [
-    "I'm afraid my neural core is offline, sir. Please install Ollama to restore full AI capability.",
-    "Running on backup systems only, sir. Install Ollama for full intelligence.",
-    "AI module unavailable, sir. See the setup instructions below.",
-]
-_fb_idx = 0
 
-
-def _fallback_reply() -> str:
-    global _fb_idx
-    r = FALLBACK_REPLIES[_fb_idx % len(FALLBACK_REPLIES)]
-    _fb_idx += 1
-    return r
-
-
-def ask_ollama(history: list[dict]) -> str:
+# ── Ollama backend ────────────────────────────────────────────────────────────
+def ask_ollama(history: list) -> str:
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history[-20:]
-    body = json.dumps({"model": OLLAMA_MODEL, "messages": messages, "stream": False}).encode()
+    body = json.dumps({"model": OLLAMA_MODEL, "messages": messages,
+                        "stream": False}).encode()
     req = urllib.request.Request(
         OLLAMA_URL, data=body,
         headers={"Content-Type": "application/json"}, method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
-            return data["message"]["content"].strip()
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read())["message"]["content"].strip()
     except urllib.error.URLError:
-        return _fallback_reply()
+        return ("My AI core is offline, sir. "
+                "Please ensure Ollama is running and tinyllama is installed.")
     except Exception as e:
-        return f"Error communicating with Ollama, sir: {e}"
+        return f"An error occurred in my language module, sir: {e}"
 
 
+# ── HUD Canvas ────────────────────────────────────────────────────────────────
+class HUD(tk.Canvas):
+    STATES = {
+        "idle":      CYAN,
+        "listening": GREEN,
+        "thinking":  GOLD,
+        "speaking":  CYAN,
+    }
+
+    def __init__(self, parent, **kw):
+        super().__init__(parent, bg=BG, highlightthickness=0, **kw)
+        self.state  = "idle"
+        self._tick  = 0
+
+        self.after(100, self._loop)
+
+    def set_state(self, s: str):
+        self.state = s
+
+    def _loop(self):
+        self._draw()
+        self._tick += 1
+        self.after(33, self._loop)   # ~30 fps
+
+    def _draw(self):
+        self.delete("all")
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 2 or h < 2:
+            return
+
+        cx = w // 2
+        cy = h // 2
+        t  = self._tick * 0.04
+        col = self.STATES.get(self.state, CYAN)
+
+        # ── Background hex grid (subtle) ──────────────────────────────────
+        for gx in range(-w, w * 2, 60):
+            for gy in range(-h, h * 2, 52):
+                offset = 30 if (gy // 52) % 2 else 0
+                self._hex(gx + offset, gy, 18, DIM)
+
+        # ── Outer static ring + tick marks ───────────────────────────────
+        R = min(cx, cy) - 18
+        self.create_oval(cx-R, cy-R, cx+R, cy+R, outline=GRAY, width=1)
+        for i in range(72):
+            ang = math.radians(i * 5)
+            ln  = 10 if i % 9 == 0 else (6 if i % 3 == 0 else 3)
+            c2  = CYAN if i % 9 == 0 else (GRAY if i % 3 == 0 else DIM)
+            x1  = cx + (R - ln) * math.cos(ang)
+            y1  = cy + (R - ln) * math.sin(ang)
+            x2  = cx + R * math.cos(ang)
+            y2  = cy + R * math.sin(ang)
+            self.create_line(x1, y1, x2, y2, fill=c2, width=1)
+
+        # ── Rotating arc 1 — slow clockwise ──────────────────────────────
+        r1 = R - 14
+        a1 = (t * 25) % 360
+        self.create_arc(cx-r1, cy-r1, cx+r1, cy+r1,
+                        start=a1, extent=250, outline=CYAN, width=2, style="arc")
+
+        # ── Rotating arc 2 — counter-clockwise ───────────────────────────
+        r2 = R - 30
+        a2 = (-t * 38) % 360
+        self.create_arc(cx-r2, cy-r2, cx+r2, cy+r2,
+                        start=a2, extent=170, outline=BLUE, width=2, style="arc")
+        self.create_arc(cx-r2, cy-r2, cx+r2, cy+r2,
+                        start=a2 + 200, extent=70, outline=BLUE, width=1, style="arc")
+
+        # ── Rotating arc 3 — fast, state-colored ─────────────────────────
+        r3 = R - 50
+        a3 = (t * 65) % 360
+        self.create_arc(cx-r3, cy-r3, cx+r3, cy+r3,
+                        start=a3, extent=110, outline=col, width=3, style="arc")
+        self.create_arc(cx-r3, cy-r3, cx+r3, cy+r3,
+                        start=a3 + 160, extent=40, outline=col, width=1, style="arc")
+
+        # ── Inner pulsing ring ────────────────────────────────────────────
+        pulse = math.sin(t * (3 if self.state == "speaking" else 1.2)) * 0.5 + 0.5
+        r4    = R - 72 + pulse * 6
+        pw    = 1 + int(pulse * 3)
+        ring_col = col if self.state != "idle" else DIM
+        self.create_oval(cx-r4, cy-r4, cx+r4, cy+r4, outline=ring_col, width=pw)
+
+        # ── Arc reactor centre ────────────────────────────────────────────
+        rc = 22
+        self.create_oval(cx-rc, cy-rc, cx+rc, cy+rc, outline=CYAN, width=2)
+        # Triangle spokes
+        for i in range(3):
+            ang = math.radians(i * 120 - 90 + t * 15)
+            x1i = cx + 6  * math.cos(ang)
+            y1i = cy + 6  * math.sin(ang)
+            x2i = cx + rc * math.cos(ang)
+            y2i = cy + rc * math.sin(ang)
+            self.create_line(x1i, y1i, x2i, y2i, fill=CYAN, width=2)
+        # Centre dot
+        ri = 5
+        self.create_oval(cx-ri, cy-ri, cx+ri, cy+ri, fill=col, outline="")
+
+        # ── HUD text labels ───────────────────────────────────────────────
+        self.create_text(cx, cy - R - 14,
+                         text="J.A.R.V.I.S.", fill=CYAN,
+                         font=("Consolas", 13, "bold"), anchor="n")
+        self.create_text(cx, cy + R + 5,
+                         text=self.state.upper(), fill=col,
+                         font=("Consolas", 9), anchor="n")
+        self.create_text(18, cy,
+                         text="STARK\nSYSTEMS", fill=GRAY,
+                         font=("Consolas", 7), anchor="w")
+        self.create_text(w - 18, cy,
+                         text="AI\nCORE", fill=GRAY,
+                         font=("Consolas", 7), anchor="e")
+
+        # ── Waveform bars when active ─────────────────────────────────────
+        if self.state in ("speaking", "listening"):
+            bars    = 24
+            bw      = 5
+            spacing = 3
+            total   = bars * (bw + spacing)
+            bx0     = cx - total // 2
+            speed   = 4 if self.state == "speaking" else 6
+            for i in range(bars):
+                bh = abs(math.sin(t * speed + i * 0.45)) * 22 + 4
+                bx = bx0 + i * (bw + spacing)
+                by = h - 10
+                self.create_rectangle(bx, by - bh, bx + bw, by,
+                                      fill=col, outline="")
+
+    def _hex(self, x, y, r, color):
+        pts = []
+        for i in range(6):
+            ang = math.radians(60 * i - 30)
+            pts += [x + r * math.cos(ang), y + r * math.sin(ang)]
+        self.create_polygon(pts, outline=color, fill="", width=1)
+
+
+# ── Main app ──────────────────────────────────────────────────────────────────
 class Jarvis:
     def __init__(self, root: tk.Tk):
-        self.root = root
+        self.root      = root
         self.root.title("J.A.R.V.I.S.")
         self.root.configure(bg=BG)
-        self.root.geometry("820x640")
-        self.root.minsize(640, 480)
+        self.root.geometry("960x740")
+        self.root.minsize(700, 560)
 
-        self._listening = False
-        self._speaking  = False
-        self._anim_idx  = 0
-        self._history: list[dict] = []
+        self._speaking      = False
+        self._mute_mic      = False
+        self._history: list = []
+        self._engine        = None
 
         self._init_tts()
         self._build_ui()
-        self._animate()
-        self._greet()
+        self._start_always_on_mic()
+        self.root.after(600, self._greet)
 
-    # ── TTS ──────────────────────────────────────────────────────────────
-
+    # ── TTS ───────────────────────────────────────────────────────────────────
     def _init_tts(self):
-        if not TTS_OK:
-            self._engine = None
-            return
-        try:
-            self._engine = pyttsx3.init()
-            for v in self._engine.getProperty('voices'):
-                if any(n in v.name.lower() for n in ('david', 'mark', 'james', 'george')):
-                    self._engine.setProperty('voice', v.id)
-                    break
-            self._engine.setProperty('rate', 155)
-            self._engine.setProperty('volume', 1.0)
-        except Exception:
-            self._engine = None
+        if PYTTSX and not (EDGE_TTS and PYGAME):
+            try:
+                self._engine = pyttsx3.init()
+                for v in self._engine.getProperty('voices'):
+                    n = v.name.lower()
+                    if any(x in n for x in ('david', 'george', 'mark', 'james')):
+                        self._engine.setProperty('voice', v.id)
+                        break
+                self._engine.setProperty('rate', 148)
+                self._engine.setProperty('volume', 1.0)
+            except Exception:
+                self._engine = None
 
     def _speak_worker(self, text: str):
         self._speaking = True
+        self._mute_mic = True
+        self._hud.set_state("speaking")
         try:
-            if self._engine:
+            if EDGE_TTS and PYGAME:
+                asyncio.run(self._edge_speak(text))
+            elif self._engine:
                 self._engine.say(text)
                 self._engine.runAndWait()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"TTS error: {e}")
         finally:
             self._speaking = False
+            self._mute_mic = False
+            self._hud.set_state("idle")
 
-    def speak_async(self, text: str):
+    async def _edge_speak(self, text: str):
+        comm = edge_tts.Communicate(text, VOICE, rate="-8%", pitch="-10Hz")
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            path = f.name
+        await comm.save(path)
+        pygame.mixer.music.load(path)
+        pygame.mixer.music.play()
+        while pygame.mixer.music.get_busy():
+            await asyncio.sleep(0.05)
+        pygame.mixer.music.unload()
+        try:
+            os.unlink(path)
+        except Exception:
+            pass
+
+    def speak(self, text: str):
         threading.Thread(target=self._speak_worker, args=(text,), daemon=True).start()
 
-    # ── Mic ──────────────────────────────────────────────────────────────
-
-    def _listen_worker(self):
-        self._set_status("Listening…", GREEN)
-        r = sr.Recognizer()
-        try:
-            with sr.Microphone() as src:
-                r.adjust_for_ambient_noise(src, duration=0.4)
-                audio = r.listen(src, timeout=8, phrase_time_limit=15)
-            text = r.recognize_google(audio)
-            self._on_user_input(text)
-        except sr.WaitTimeoutError:
-            self._set_status("No speech detected, sir.", GOLD)
-        except sr.UnknownValueError:
-            self._set_status("Didn't catch that, sir.", GOLD)
-        except Exception as e:
-            self._set_status(f"Mic error: {e}", GOLD)
-        finally:
-            self._listening = False
-            self.root.after(0, lambda: self._mic_btn.config(state="normal"))
-
-    def start_listening(self):
-        if self._listening or not SR_OK:
+    # ── Always-on microphone ──────────────────────────────────────────────────
+    def _start_always_on_mic(self):
+        if not SR:
+            self._append_sys("SpeechRecognition not installed — voice input disabled.")
             return
-        self._listening = True
-        self._mic_btn.config(state="disabled")
-        threading.Thread(target=self._listen_worker, daemon=True).start()
+        try:
+            rec = sr.Recognizer()
+            rec.energy_threshold        = 350
+            rec.dynamic_energy_threshold = True
+            mic = sr.Microphone()
 
-    # ── UI ───────────────────────────────────────────────────────────────
+            with mic as src:
+                rec.adjust_for_ambient_noise(src, duration=1.0)
 
+            def on_speech(recognizer, audio):
+                if self._mute_mic or self._speaking:
+                    return
+                self._hud.set_state("listening")
+                try:
+                    text = recognizer.recognize_google(audio).strip()
+                    if text:
+                        self.root.after(0, lambda t=text: self._on_input(t))
+                except sr.UnknownValueError:
+                    pass
+                except Exception:
+                    pass
+                finally:
+                    if not self._speaking:
+                        self._hud.set_state("idle")
+
+            rec.listen_in_background(mic, on_speech, phrase_time_limit=12)
+            self._append_sys("Microphone active — just speak, sir.")
+        except Exception as e:
+            self._append_sys(f"Mic unavailable: {e}")
+
+    # ── Process input ─────────────────────────────────────────────────────────
+    def _on_input(self, text: str):
+        self._append("YOU", text, "you")
+        self._hud.set_state("thinking")
+        threading.Thread(target=self._respond, args=(text,), daemon=True).start()
+
+    def _respond(self, text: str):
+        self._history.append({"role": "user", "content": text})
+        reply = ask_ollama(self._history)
+        self._history.append({"role": "assistant", "content": reply})
+        self.root.after(0, lambda r=reply: self._append("JARVIS", r, "jarvis"))
+        self.speak(reply)
+
+    # ── UI ────────────────────────────────────────────────────────────────────
     def _build_ui(self):
-        # Header
-        hdr = tk.Frame(self.root, bg=PANEL, height=70)
-        hdr.pack(fill="x")
-        hdr.pack_propagate(False)
-        tk.Label(hdr, text="J.A.R.V.I.S.", font=("Consolas", 22, "bold"),
-                 fg=ACCENT, bg=PANEL).pack(side="left", padx=20, pady=14)
-        self._status_lbl = tk.Label(hdr, text="ONLINE", font=("Consolas", 10),
-                                    fg=GREEN, bg=PANEL)
-        self._status_lbl.pack(side="left")
-        tk.Label(hdr, text="OFFLINE AI  ●  NO KEY REQUIRED",
-                 font=("Consolas", 9), fg=DIM, bg=PANEL).pack(side="right", padx=20)
+        # HUD
+        self._hud = HUD(self.root, height=330)
+        self._hud.pack(fill="x")
 
-        # Arc strip
-        tk.Frame(self.root, bg=ACCENT, height=2).pack(fill="x")
+        # Cyan divider line
+        tk.Frame(self.root, bg=CYAN, height=1).pack(fill="x")
 
-        # Chat area
-        body = tk.Frame(self.root, bg=BG)
-        body.pack(fill="both", expand=True, padx=16, pady=(12, 0))
-        self._chat = tk.Text(body, bg=PANEL, fg=TEXT, font=("Consolas", 11),
-                             relief="flat", padx=14, pady=10, wrap="word",
-                             state="disabled", borderwidth=0,
-                             selectbackground=DIM, selectforeground=WHITE)
-        sb = tk.Scrollbar(body, command=self._chat.yview, bg=BG,
-                          troughcolor=PANEL, activebackground=ACCENT, relief="flat")
+        # Chat log
+        chat_frame = tk.Frame(self.root, bg=PANEL)
+        chat_frame.pack(fill="both", expand=True)
+
+        self._chat = tk.Text(
+            chat_frame, bg=PANEL, fg=WHITE,
+            font=("Consolas", 11), relief="flat",
+            padx=18, pady=12, wrap="word",
+            state="disabled", borderwidth=0,
+            selectbackground=BLUE, selectforeground=WHITE,
+        )
+        sb = tk.Scrollbar(chat_frame, command=self._chat.yview,
+                          bg=BG, troughcolor=DIM, relief="flat")
         self._chat.config(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         self._chat.pack(fill="both", expand=True)
-        self._chat.tag_config("you",    foreground=GOLD,  font=("Consolas", 11, "bold"))
-        self._chat.tag_config("jarvis", foreground=ACCENT, font=("Consolas", 11, "bold"))
-        self._chat.tag_config("msg",    foreground=TEXT,   font=("Consolas", 11))
-        self._chat.tag_config("sys",    foreground=DIM,    font=("Consolas", 9, "italic"))
 
-        # Input row
-        row = tk.Frame(self.root, bg=BG)
-        row.pack(fill="x", padx=16, pady=10)
-        self._entry = tk.Entry(row, bg=PANEL, fg=WHITE, insertbackground=ACCENT,
-                               font=("Consolas", 12), relief="flat",
-                               highlightthickness=1, highlightcolor=ACCENT,
-                               highlightbackground=DIM)
-        self._entry.pack(side="left", fill="x", expand=True, ipady=8, padx=(0, 8))
-        self._entry.bind("<Return>", lambda e: self._on_send())
+        self._chat.tag_config("you",    foreground="#ffcc44", font=("Consolas", 11, "bold"))
+        self._chat.tag_config("jarvis", foreground=CYAN,      font=("Consolas", 11, "bold"))
+        self._chat.tag_config("msg",    foreground=WHITE,     font=("Consolas", 11))
+        self._chat.tag_config("sys",    foreground=GRAY,      font=("Consolas", 9,  "italic"))
 
-        self._mic_btn = tk.Button(row, text="🎙", font=("Consolas", 14),
-                                  bg=DIM, fg=WHITE, activebackground=GREEN,
-                                  activeforeground=BG, relief="flat", padx=10,
-                                  command=self.start_listening,
-                                  state="normal" if SR_OK else "disabled")
-        self._mic_btn.pack(side="left")
+        # Text input fallback row
+        row = tk.Frame(self.root, bg="#000d1a", pady=8)
+        row.pack(fill="x")
 
-        tk.Button(row, text="SEND", font=("Consolas", 11, "bold"),
-                  bg=ACCENT, fg=BG, activebackground=WHITE,
-                  relief="flat", padx=16, command=self._on_send
-                  ).pack(side="left", padx=(8, 0), ipady=4)
+        self._entry = tk.Entry(
+            row, bg="#001525", fg=WHITE, insertbackground=CYAN,
+            font=("Consolas", 11), relief="flat",
+            highlightthickness=1, highlightcolor=CYAN,
+            highlightbackground=BLUE,
+        )
+        self._entry.pack(side="left", fill="x", expand=True, ipady=7, padx=(16, 8))
+        self._entry.bind("<Return>", lambda e: self._on_type())
+        placeholder = "Speak freely — or type here and press Enter, sir."
+        self._entry.insert(0, placeholder)
+        self._entry.config(fg=GRAY)
+        self._entry.bind("<FocusIn>",
+            lambda e: (self._entry.delete(0, "end"),
+                       self._entry.config(fg=WHITE))
+            if self._entry.get() == placeholder else None)
 
-        # Footer
-        ftr = tk.Frame(self.root, bg=PANEL, height=28)
-        ftr.pack(fill="x")
-        ftr.pack_propagate(False)
-        self._anim_lbl = tk.Label(ftr, text="● ● ●", font=("Consolas", 9),
-                                  fg=DIM, bg=PANEL)
-        self._anim_lbl.pack(side="left", padx=16, pady=6)
-        tk.Label(ftr, text="X-MAN ASCENSION  v2.0  ●  POWERED BY OLLAMA",
-                 font=("Consolas", 9), fg=DIM, bg=PANEL).pack(side="right", padx=16)
+        tk.Button(
+            row, text="SEND", font=("Consolas", 10, "bold"),
+            bg=CYAN, fg=BG, activebackground=WHITE, activeforeground=BG,
+            relief="flat", padx=14, pady=5, command=self._on_type,
+        ).pack(side="left", padx=(0, 16))
 
-    # ── Helpers ──────────────────────────────────────────────────────────
+    def _on_type(self):
+        text = self._entry.get().strip()
+        if not text or "Speak freely" in text:
+            return
+        self._entry.delete(0, "end")
+        self._on_input(text)
 
-    def _set_status(self, text: str, color: str = GREEN):
-        self.root.after(0, lambda: self._status_lbl.config(text=text, fg=color))
-
-    def _append(self, speaker: str, message: str, tag: str = "msg"):
+    def _append(self, speaker: str, msg: str, tag: str):
         self._chat.config(state="normal")
         if self._chat.index("end-1c") != "1.0":
             self._chat.insert("end", "\n")
-        sp_tag = "you" if speaker == "YOU" else "jarvis" if speaker == "JARVIS" else "sys"
-        if speaker:
-            self._chat.insert("end", f"{speaker}: ", sp_tag)
-        self._chat.insert("end", message + "\n", tag)
+        self._chat.insert("end", f"{speaker}: ", tag)
+        self._chat.insert("end", msg + "\n", "msg")
         self._chat.see("end")
         self._chat.config(state="disabled")
 
-    def _on_send(self):
-        text = self._entry.get().strip()
-        if not text:
-            return
-        self._entry.delete(0, "end")
-        self._on_user_input(text)
-
-    def _on_user_input(self, text: str):
-        self._append("YOU", text)
-        self._set_status("Thinking…", ACCENT)
-        self._history.append({"role": "user", "content": text})
-        threading.Thread(target=self._process, daemon=True).start()
-
-    def _process(self):
-        reply = ask_ollama(self._history)
-        self._history.append({"role": "assistant", "content": reply})
-        self.root.after(0, lambda: self._append("JARVIS", reply))
-        self._set_status("Ready, sir.", GREEN)
-        self.speak_async(reply)
+    def _append_sys(self, msg: str):
+        self._chat.config(state="normal")
+        if self._chat.index("end-1c") != "1.0":
+            self._chat.insert("end", "\n")
+        self._chat.insert("end", f"[ {msg} ]\n", "sys")
+        self._chat.see("end")
+        self._chat.config(state="disabled")
 
     def _greet(self):
-        msg = "Good day, sir. J.A.R.V.I.S. is online and at your service."
-        self._append("JARVIS", msg)
-        # show setup tip if Ollama likely not running
-        self._append("", "Tip: install Ollama (ollama.com) and run: ollama pull tinyllama", "sys")
-        self.speak_async(msg)
-
-    def _animate(self):
-        frames = [("▶ ◀ ● ◀ ▶", ACCENT), ("◀ ▶ ● ▶ ◀", DIM),
-                  ("● ◀ ▶ ◀ ●", ACCENT), ("▶ ● ◀ ● ▶", DIM)]
-        txt, col = frames[self._anim_idx % len(frames)]
-        if self._speaking:  col = GOLD
-        elif self._listening: col = GREEN
-        self._anim_lbl.config(text=txt, fg=col)
-        self._anim_idx += 1
-        self.root.after(500, self._animate)
+        msg = "Good day, sir. All systems are fully operational. How may I be of service?"
+        self._append("JARVIS", msg, "jarvis")
+        self.speak(msg)
 
 
+# ── Entry ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
+    if not EDGE_TTS:
+        print("[JARVIS] For the best voice: pip install edge-tts pygame")
+    if not SR:
+        print("[JARVIS] For voice input:    pip install SpeechRecognition pyaudio")
+    print("[JARVIS] For offline AI:     install Ollama then: ollama pull tinyllama")
+
     root = tk.Tk()
     Jarvis(root)
     root.mainloop()
