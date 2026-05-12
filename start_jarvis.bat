@@ -1,40 +1,66 @@
 @echo off
+setlocal
 title JARVIS
 color 0B
 
+:: Pre-flight checks with friendly errors
 if not exist ".env" (
-    echo [ERROR] .env file not found. Run setup_windows.bat first.
+    color 0C
+    echo.
+    echo  [X] .env file not found.
+    echo.
+    echo      You need to run INSTALL.bat first.
+    echo.
     pause
     exit /b 1
 )
 
 if not exist "node_modules" (
-    echo [ERROR] Dependencies not installed. Run setup_windows.bat first.
+    color 0C
+    echo.
+    echo  [X] Dependencies not installed.
+    echo.
+    echo      You need to run INSTALL.bat first.
+    echo.
     pause
     exit /b 1
 )
 
-findstr /C:"ANTHROPIC_API_KEY=sk-ant" ".env" >nul
-if %errorlevel% neq 0 (
-    findstr /C:"ANTHROPIC_API_KEY=your-" ".env" >nul
-    if not errorlevel 1 (
-        echo [ERROR] ANTHROPIC_API_KEY still set to placeholder.
-        echo         Edit .env with your real key, then try again.
+findstr /C:"your-anthropic-api-key-here" ".env" >nul
+if not errorlevel 1 (
+    color 0C
+    echo.
+    echo  [X] ANTHROPIC_API_KEY is still the placeholder.
+    echo.
+    echo      Edit .env in this folder and paste a real key,
+    echo      or run INSTALL.bat again to set it interactively.
+    echo.
+    pause
+    exit /b 1
+)
+
+:: Build frontend if missing
+if not exist "frontend\dist\index.html" (
+    echo  [BUILD] Building frontend (one-time)...
+    cd frontend
+    call npm run build
+    cd ..
+    if errorlevel 1 (
+        color 0C
+        echo  [X] Frontend build failed. Try running INSTALL.bat again.
         pause
         exit /b 1
     )
 )
 
-:: Build frontend if dist missing
-if not exist "frontend\dist\index.html" (
-    echo [BUILD] Building frontend...
-    cd frontend
-    call npm run build
-    cd ..
-)
+cls
+echo.
+echo  Starting JARVIS... your URL and QR code will appear below.
+echo  (Press Ctrl+C in this window to stop.)
+echo.
+
+node server.js
 
 echo.
-node server.js
-echo.
-echo JARVIS stopped.
+echo  JARVIS stopped.
 pause
