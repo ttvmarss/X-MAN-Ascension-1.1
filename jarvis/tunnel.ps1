@@ -64,8 +64,7 @@ Write-Host "  JARVIS server: OK" -ForegroundColor Green
 
 # Start Cloudflare tunnel
 Write-Host "  Opening tunnel to the internet..." -ForegroundColor Yellow
-$logFile = "$env:TEMP\cf-tunnel.log"
-if (Test-Path $logFile) { Remove-Item $logFile }
+$logFile = "$env:TEMP\cf-tunnel-$PID.log"
 $tunnel = Start-Process ".\cloudflared.exe" -ArgumentList "tunnel","--url","http://127.0.0.1:$PORT","--no-autoupdate" -PassThru -WindowStyle Hidden -RedirectStandardError $logFile
 
 # Wait for tunnel URL
@@ -92,10 +91,11 @@ if (-not $publicUrl) {
     exit 1
 }
 
-# Check API keys
+# Check which AI key is configured
 $envLines = if (Test-Path ".env") { Get-Content ".env" } else { @() }
+$hasGroq      = ($envLines | Where-Object { $_ -match "^GROQ_API_KEY=.{10}" }).Count -gt 0
 $hasAnthropic = ($envLines | Where-Object { $_ -match "^ANTHROPIC_API_KEY=.{10}" }).Count -gt 0
-$hasFish = ($envLines | Where-Object { $_ -match "^FISH_API_KEY=.{10}" }).Count -gt 0
+$hasAnyLLM    = $hasGroq -or $hasAnthropic
 
 # Print the URL
 Write-Host ""
@@ -108,35 +108,35 @@ Write-Host ""
 Write-Host "  $publicUrl" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Works on: T-Mobile 5G, any WiFi, anywhere in the world" -ForegroundColor Green
-Write-Host "  Mic works: YES - it uses HTTPS" -ForegroundColor Green
-Write-Host "  Cost: FREE" -ForegroundColor Green
+Write-Host "  Mic works: YES - HTTPS enabled" -ForegroundColor Green
+Write-Host "  Voice: Browser built-in (free, no signup)" -ForegroundColor Green
 Write-Host "  ======================================================" -ForegroundColor Green
 Write-Host ""
 
-if (-not $hasAnthropic -or -not $hasFish) {
-    Write-Host "  WARNING: Missing API keys - JARVIS needs these:" -ForegroundColor Yellow
-    if (-not $hasAnthropic) {
-        Write-Host "    Anthropic key: console.anthropic.com (free)" -ForegroundColor Yellow
-    }
-    if (-not $hasFish) {
-        Write-Host "    Fish Audio key: fish.audio then API Keys (free)" -ForegroundColor Yellow
-    }
+if (-not $hasAnyLLM) {
+    Write-Host "  ACTION NEEDED - Add a free AI key so JARVIS can think:" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "  Open the URL above, tap the 3-dot menu, tap Settings" -ForegroundColor Yellow
-    Write-Host "  and paste your keys there. No file editing needed." -ForegroundColor Yellow
+    Write-Host "  1. Go to console.groq.com" -ForegroundColor Cyan
+    Write-Host "  2. Sign up free with your email (no credit card)" -ForegroundColor Cyan
+    Write-Host "  3. Click API Keys then Create API Key" -ForegroundColor Cyan
+    Write-Host "  4. Open the URL above on your phone" -ForegroundColor Cyan
+    Write-Host "  5. Tap the 3-dot menu, tap Settings, paste key as GROQ_API_KEY" -ForegroundColor Cyan
     Write-Host ""
 }
 
 # Open in browser on PC too
 Start-Process $publicUrl
 
-Write-Host "  Close this window to stop JARVIS." -ForegroundColor Gray
+Write-Host "  DO NOT CLOSE THIS WINDOW - JARVIS stops if you close it." -ForegroundColor Red
 Write-Host ""
 
-# Keep alive
-try {
-    Wait-Process -Id $server.Id -ErrorAction SilentlyContinue
-} catch {}
-
-$tunnel | Stop-Process -Force -ErrorAction SilentlyContinue
-$server | Stop-Process -Force -ErrorAction SilentlyContinue
+# Keep alive - loop so it never exits until user closes window
+while ($true) {
+    Start-Sleep -Seconds 5
+    # Restart server if it crashed
+    if ($server.HasExited) {
+        Write-Host "  Server stopped - restarting..." -ForegroundColor Yellow
+        $server = Start-Process python -ArgumentList "server.py","--host","127.0.0.1","--port","$PORT" -PassThru -WindowStyle Hidden
+        Start-Sleep -Seconds 3
+    }
+}
