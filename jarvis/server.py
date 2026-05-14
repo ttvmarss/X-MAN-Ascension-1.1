@@ -1697,10 +1697,10 @@ async def _lookup_and_report(lookup_type: str, lookup_fn, ws, history: list[dict
             try:
                 await ws.send_json({"type": "status", "state": "speaking"})
                 if audio:
-                    await ws.send_json({"type": "audio", "data": audio, "text": result_text})
+                    await ws.send_json({"type": "audio", "data": base64.b64encode(audio).decode(), "text": result_text})
                 else:
                     await ws.send_json({"type": "text", "text": result_text})
-                await ws.send_json({"type": "status", "state": "idle"})
+                    await ws.send_json({"type": "status", "state": "idle"})
             except Exception:
                 pass
 
@@ -1717,8 +1717,9 @@ async def _lookup_and_report(lookup_type: str, lookup_fn, ws, history: list[dict
             audio = await synthesize_speech(fallback)
             await ws.send_json({"type": "status", "state": "speaking"})
             if audio:
-                await ws.send_json({"type": "audio", "data": audio, "text": fallback})
-            await ws.send_json({"type": "status", "state": "idle"})
+                await ws.send_json({"type": "audio", "data": base64.b64encode(audio).decode(), "text": fallback})
+            else:
+                await ws.send_json({"type": "status", "state": "idle"})
         except Exception:
             pass
     except Exception as e:
@@ -2079,7 +2080,7 @@ async def voice_handler(ws: WebSocket):
                         await ws.send_json({"type": "audio", "data": encoded, "text": greeting})
                         history.append({"role": "assistant", "content": greeting})
                         log.info(f"JARVIS: {greeting}")
-                        await ws.send_json({"type": "status", "state": "idle"})
+                        # No status:idle here — audioPlayer.onFinished handles transition
                 except Exception as e:
                     log.warning(f"Greeting failed: {e}")
 
@@ -2106,7 +2107,7 @@ async def voice_handler(ws: WebSocket):
                 await ws.send_json({"type": "status", "state": "speaking"})
                 audio = await synthesize_speech(tts)
                 if audio:
-                    await ws.send_json({"type": "audio", "data": audio, "text": response_text})
+                    await ws.send_json({"type": "audio", "data": base64.b64encode(audio).decode(), "text": response_text})
                 else:
                     await ws.send_json({"type": "text", "text": response_text})
                 continue
@@ -2744,11 +2745,15 @@ async def serve_index():
         return FileResponse(str(FRONTEND_DIST / "index.html"))
     elif (FRONTEND_SRC / "index.html").exists():
         return FileResponse(str(FRONTEND_SRC / "index.html"))
-    return JSONResponse({"status": "JARVIS server online", "ui": "Run: cd frontend && npm install && npm run dev"})
+    return JSONResponse({"status": "JARVIS server online", "ui": "Run: cd frontend && npm install && npm run build"})
 
 
-if FRONTEND_DIST.exists() and (FRONTEND_DIST / "assets").exists():
-    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+# Mount entire dist directory so all built assets (JS, CSS, fonts, icons) are served
+if FRONTEND_DIST.exists():
+    if (FRONTEND_DIST / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+    # Serve any other root-level static files (favicons, manifests, etc.)
+    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIST)), name="static")
 
 
 # ---------------------------------------------------------------------------

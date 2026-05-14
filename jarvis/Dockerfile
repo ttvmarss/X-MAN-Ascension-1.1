@@ -2,10 +2,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system deps for Playwright and Node.js
-RUN apt-get update && apt-get install -y \
-    curl wget gnupg ca-certificates \
-    nodejs npm \
+# Install system deps + Node.js 20 (Vite 6 requires Node 18+)
+RUN apt-get update && apt-get install -y curl gnupg ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs \
     libnss3 libatk-bridge2.0-0 libcups2 libdrm2 \
     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
     libxrandr2 libgbm1 libasound2 \
@@ -18,13 +18,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install Playwright browsers (for web browsing feature)
 RUN playwright install chromium --with-deps 2>/dev/null || true
 
-# Frontend build
+# Frontend build — separate layer for better caching
 COPY frontend/package*.json ./frontend/
 RUN cd frontend && npm ci --silent
 COPY frontend/ ./frontend/
 RUN cd frontend && npm run build
 
-# Copy all app files
+# Copy all app files (frontend/dist is already built in the layer above)
 COPY . .
 
 # Create data directory
