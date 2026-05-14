@@ -108,6 +108,15 @@ audioPlayer.onFinished(() => {
 });
 
 // ---------------------------------------------------------------------------
+// WebSocket reconnect — reset UI so user isn't stuck in thinking/speaking
+// ---------------------------------------------------------------------------
+
+socket.onConnected(() => {
+  audioPlayer.stop();
+  transition("listening");
+});
+
+// ---------------------------------------------------------------------------
 // WebSocket messages
 // ---------------------------------------------------------------------------
 
@@ -130,9 +139,12 @@ socket.onMessage((msg) => {
     // Log text for debugging
     if (msg.text) console.log("[JARVIS]", msg.text);
   } else if (type === "stop_audio") {
-    // Server tells us to stop immediately (barge-in / user spoke)
+    // Server tells us to stop immediately (barge-in / user spoke).
+    // Only exit speaking — don't interrupt thinking (a new response is coming).
     audioPlayer.stop();
-    transition("listening");
+    if (currentState === "speaking") {
+      transition("listening");
+    }
   } else if (type === "status") {
     const state = msg.state as string;
     if (state === "thinking" && currentState !== "thinking") {

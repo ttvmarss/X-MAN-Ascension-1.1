@@ -131,7 +131,10 @@ export function createAudioPlayer(): AudioPlayer {
   let isPlaying = false;
   let currentSource: AudioBufferSourceNode | null = null;
   let finishedCallback: (() => void) | null = null;
-  let stopped = false;  // Set true during stop() to prevent onended firing
+  let stopped = false;
+  // Generation counter: incremented on every stop(). Async decodes that
+  // started before the stop are discarded when they complete.
+  let generation = 0;
 
   function playNext() {
     if (stopped || queue.length === 0) {
@@ -159,6 +162,7 @@ export function createAudioPlayer(): AudioPlayer {
 
   return {
     async enqueue(base64: string) {
+      const myGeneration = generation;
       stopped = false;
       // Resume audio context (browser autoplay policy)
       if (audioCtx.state === "suspended") {
@@ -172,15 +176,18 @@ export function createAudioPlayer(): AudioPlayer {
           bytes[i] = binary.charCodeAt(i);
         }
         const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer.slice(0));
+        // Discard if stop() was called while we were decoding
+        if (myGeneration !== generation) return;
         queue.push(audioBuffer);
         if (!isPlaying) playNext();
       } catch (err) {
         console.error("[audio] decode error:", err);
-        if (!isPlaying && queue.length > 0) playNext();
+        if (myGeneration === generation && !isPlaying && queue.length > 0) playNext();
       }
     },
 
     stop() {
+      generation++;   // Invalidate all in-flight decodes
       stopped = true;
       queue.length = 0;
       if (currentSource) {
