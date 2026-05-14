@@ -2739,13 +2739,73 @@ FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
 FRONTEND_SRC = Path(__file__).parent / "frontend"
 
 
+_SETUP_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>JARVIS — Setup Required</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#050508;color:#e0e8ff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+         display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+    .card{background:rgba(14,165,233,0.05);border:1px solid rgba(14,165,233,0.2);border-radius:16px;
+          padding:40px;max-width:520px;width:100%}
+    h1{font-size:22px;font-weight:300;letter-spacing:4px;text-transform:uppercase;
+       color:#38bdf8;margin-bottom:8px}
+    .sub{color:rgba(255,255,255,0.35);font-size:12px;letter-spacing:2px;margin-bottom:32px}
+    h2{font-size:11px;font-weight:500;letter-spacing:2px;text-transform:uppercase;
+       color:rgba(255,255,255,0.3);margin-bottom:12px}
+    .step{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);
+          border-radius:8px;padding:16px;margin-bottom:12px}
+    .step p{font-size:14px;color:rgba(255,255,255,0.7);line-height:1.6;margin-bottom:8px}
+    code{background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.2);
+         border-radius:4px;padding:2px 8px;font-family:monospace;font-size:13px;color:#38bdf8}
+    .cmd{display:block;margin:6px 0;padding:10px 14px;background:rgba(0,0,0,0.4);
+         border-radius:6px;font-family:monospace;font-size:13px;color:#7dd3fc;
+         border:1px solid rgba(14,165,233,0.15)}
+    a{color:#38bdf8;text-decoration:none}
+    .ok{color:#22c55e;font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>J.A.R.V.I.S.</h1>
+    <div class="sub">Server is online &mdash; frontend setup needed</div>
+
+    <h2>One-time setup (run these commands in terminal)</h2>
+
+    <div class="step">
+      <p><strong>Step 1:</strong> Add your API keys to <code>.env</code></p>
+      <span class="cmd">nano .env</span>
+      <p>Set <code>ANTHROPIC_API_KEY</code> (from <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>)<br>
+         Set <code>FISH_API_KEY</code> (from <a href="https://fish.audio" target="_blank">fish.audio</a> &rarr; API Keys)</p>
+    </div>
+
+    <div class="step">
+      <p><strong>Step 2:</strong> Build the frontend (one time only)</p>
+      <span class="cmd">cd frontend && npm install && npm run build && cd ..</span>
+    </div>
+
+    <div class="step">
+      <p><strong>Step 3:</strong> Restart JARVIS</p>
+      <span class="cmd">bash start.sh</span>
+    </div>
+
+    <div class="step">
+      <p class="ok">&#10003; Server is running. Once setup is complete, reload this page.</p>
+    </div>
+  </div>
+</body>
+</html>"""
+
 @app.get("/")
 async def serve_index():
+    # Only serve built dist — raw source files need the Vite dev server to work
     if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
         return FileResponse(str(FRONTEND_DIST / "index.html"))
-    elif (FRONTEND_SRC / "index.html").exists():
-        return FileResponse(str(FRONTEND_SRC / "index.html"))
-    return JSONResponse({"status": "JARVIS server online", "ui": "Run: cd frontend && npm install && npm run build"})
+    from starlette.responses import HTMLResponse
+    return HTMLResponse(_SETUP_PAGE)
 
 
 # Mount entire dist directory so all built assets (JS, CSS, fonts, icons) are served
