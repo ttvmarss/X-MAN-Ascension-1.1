@@ -22,8 +22,7 @@ data/.jarvis_output.txt
 # Certificates
 *.pem
 
-# Build
-dist/
+# Build (keep frontend/dist committed so server works without npm build)
 .vite/
 frontend/.vite/
 
