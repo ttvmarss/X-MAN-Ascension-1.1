@@ -6,7 +6,7 @@
  */
 
 import { createOrb, type OrbState } from "./orb";
-import { createVoiceInput, createAudioPlayer } from "./voice";
+import { createVoiceInput, createAudioPlayer, browserSpeak, browserSpeakStop } from "./voice";
 import { createSocket } from "./ws";
 import { openSettings, checkFirstTimeSetup } from "./settings";
 import "./style.css";
@@ -94,6 +94,7 @@ const voiceInput = createVoiceInput(
     // Interim speech detected — barge-in: stop JARVIS audio immediately
     if (currentState === "speaking") {
       audioPlayer.stop();
+      browserSpeakStop();
       transition("listening");
     }
   },
@@ -138,10 +139,20 @@ socket.onMessage((msg) => {
     }
     // Log text for debugging
     if (msg.text) console.log("[JARVIS]", msg.text);
+  } else if (type === "speak") {
+    // Browser speech synthesis — used when no Fish Audio key is configured
+    const speakText = msg.text as string;
+    if (speakText) {
+      if (currentState !== "speaking") transition("speaking");
+      browserSpeak(speakText, () => {
+        transition("idle");
+      });
+    }
   } else if (type === "stop_audio") {
     // Server tells us to stop immediately (barge-in / user spoke).
     // Only exit speaking — don't interrupt thinking (a new response is coming).
     audioPlayer.stop();
+    browserSpeakStop();
     if (currentState === "speaking") {
       transition("listening");
     }

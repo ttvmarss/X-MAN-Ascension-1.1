@@ -63,9 +63,12 @@ log = logging.getLogger("jarvis")
 # ---------------------------------------------------------------------------
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")          # Free at console.groq.com — no credit card
 FISH_API_KEY = os.getenv("FISH_API_KEY", "")
 FISH_VOICE_ID = os.getenv("FISH_VOICE_ID", "612b878b113047d9a770c069c8b4fdfe")  # JARVIS (MCU)
 FISH_API_URL = "https://api.fish.audio/v1/tts"
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "llama-3.1-8b-instant"  # Fast, free, capable
 USER_NAME = os.getenv("USER_NAME", "sir")
 WEATHER_LOCATION = os.getenv("WEATHER_LOCATION", "")  # e.g. "New York" or leave blank for auto-detect
 AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")  # Optional: set to require token auth for remote access
@@ -1078,10 +1081,32 @@ _last_greeting_time: float = 0
 # TTS (Fish Audio)
 # ---------------------------------------------------------------------------
 
+async def speak_ws(ws, text: str, response_id: int | None = None) -> None:
+    """Send speech to the WebSocket client.
+    Uses Fish Audio if key is configured, otherwise tells browser to speak."""
+    tts_text = strip_markdown_for_tts(text)
+    await ws.send_json({"type": "status", "state": "speaking"})
+
+    if FISH_API_KEY:
+        audio = await synthesize_speech(tts_text)
+        # Cancel check
+        if response_id is not None and _state_ref.get("response_id") != response_id:
+            return
+        if audio:
+            await ws.send_json({"type": "audio", "data": base64.b64encode(audio).decode(), "text": text})
+        else:
+            # Fish failed — fall back to browser speech
+            await ws.send_json({"type": "speak", "text": tts_text})
+    else:
+        # No Fish key — use browser's built-in voice (free, no signup)
+        await ws.send_json({"type": "speak", "text": tts_text})
+
+_state_ref: dict = {}  # Set in voice_ws to allow speak_ws to check cancellation
+
+
 async def synthesize_speech(text: str) -> Optional[bytes]:
     """Generate speech audio from text using Fish Audio TTS."""
     if not FISH_API_KEY:
-        log.warning("FISH_API_KEY not set, skipping TTS")
         return None
 
     try:
@@ -1185,6 +1210,91 @@ async def generate_response(
     except Exception as e:
         log.error(f"LLM error: {e}")
         return "Apologies, sir. I'm having trouble connecting to my language systems."
+
+
+async def _llm(
+    text: str,
+    task_mgr: ClaudeTaskManager,
+    projects: list[dict],
+    conversation_history: list[dict],
+    last_response: str = "",
+    session_summary: str = "",
+) -> str:
+    """Pick Anthropic or Groq automatically based on which key is configured."""
+    if anthropic_client:
+        return await generate_response(
+            text, anthropic_client, task_mgr, projects, conversation_history,
+            last_response=last_response, session_summary=session_summary,
+        )
+    if GROQ_API_KEY:
+        return await generate_response_groq(
+            text, task_mgr, projects, conversation_history,
+            last_response=last_response, session_summary=session_summary,
+        )
+    return (
+        "I need an AI key to think, sir. "
+        "Go to console.groq.com, sign up free, get an API key, "
+        "then open the Settings panel and paste it in as GROQ_API_KEY."
+    )
+
+
+async def generate_response_groq(
+    text: str,
+    task_mgr: ClaudeTaskManager,
+    projects: list[dict],
+    conversation_history: list[dict],
+    last_response: str = "",
+    session_summary: str = "",
+) -> str:
+    """Generate a JARVIS response using Groq free API (llama-3.1-8b-instant)."""
+    now = datetime.now()
+    current_time = now.strftime("%A, %B %d, %Y at %I:%M %p")
+    weather_info = _ctx_cache.get("weather", "Weather data unavailable.")
+
+    system = JARVIS_SYSTEM_PROMPT.format(
+        current_time=current_time,
+        weather_info=weather_info,
+        screen_context=_ctx_cache["screen"] or "Not checked yet.",
+        calendar_context=_ctx_cache["calendar"],
+        mail_context=_ctx_cache["mail"],
+        active_tasks=task_mgr.get_active_tasks_summary(),
+        dispatch_context=dispatch_registry.format_for_prompt(),
+        known_projects=format_projects_for_prompt(projects),
+        user_name=USER_NAME,
+        project_dir=PROJECT_DIR,
+    )
+    if last_response:
+        system += f'\n\nYOUR LAST RESPONSE (do not repeat this):\n"{last_response[:150]}"'
+    if session_summary:
+        system += f"\n\nSESSION CONTEXT:\n{session_summary}"
+    memory_ctx = build_memory_context(text)
+    if memory_ctx:
+        system += f"\n\nJARVIS MEMORY:\n{memory_ctx}"
+
+    # Build OpenAI-compatible messages
+    groq_messages = [{"role": "system", "content": system}]
+    for m in conversation_history[-20:]:
+        role = m.get("role", "user")
+        if role in ("user", "assistant"):
+            groq_messages.append({"role": role, "content": m.get("content", "")})
+    if not groq_messages or groq_messages[-1].get("content") != text:
+        groq_messages.append({"role": "user", "content": text})
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as http:
+            resp = await http.post(
+                GROQ_API_URL,
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                json={"model": GROQ_MODEL, "messages": groq_messages, "max_tokens": 250},
+            )
+            if resp.status_code == 200:
+                return resp.json()["choices"][0]["message"]["content"]
+            else:
+                log.error(f"Groq error: {resp.status_code} {resp.text[:200]}")
+                return "Apologies, sir. My language systems are having a moment."
+    except Exception as e:
+        log.error(f"Groq error: {e}")
+        return "Apologies, sir. I'm having trouble connecting right now."
 
 
 # ---------------------------------------------------------------------------
@@ -1377,8 +1487,11 @@ async def lifespan(application: FastAPI):
     global anthropic_client, cached_projects
     if ANTHROPIC_API_KEY:
         anthropic_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+        log.info("LLM: Anthropic Claude")
+    elif GROQ_API_KEY:
+        log.info("LLM: Groq (free tier)")
     else:
-        log.warning("ANTHROPIC_API_KEY not set — LLM features disabled")
+        log.warning("No LLM key set — add ANTHROPIC_API_KEY or GROQ_API_KEY to .env")
     cached_projects = []
 
     # Start context refresh in a separate thread (never touches event loop)
@@ -2039,6 +2152,9 @@ async def voice_handler(ws: WebSocket):
         "cancel": False,     # Set True to abort in-flight response
         "speaking": False,   # True while JARVIS is sending audio chunks
     }
+    # Allow speak_ws() to check cancellation
+    global _state_ref
+    _state_ref = _state
 
     # Audio collision prevention — track when user last spoke
     voice_state = {"last_user_time": 0.0}
@@ -2208,10 +2324,9 @@ async def voice_handler(ws: WebSocket):
                 # ── WORK MODE: speech → claude -p → Haiku summary → JARVIS voice ──
                 elif work_session.active:
                     if is_casual_question(user_text):
-                        # Quick chat — bypass claude -p, use Haiku
-                        response_text = await generate_response(
-                            user_text, anthropic_client, task_manager,
-                            cached_projects, history,
+                        # Quick chat — use available LLM
+                        response_text = await _llm(
+                            user_text, task_manager, cached_projects, history,
                             last_response=last_jarvis_response,
                             session_summary=session_summary,
                         )
@@ -2310,33 +2425,29 @@ async def voice_handler(ws: WebSocket):
                         else:
                             response_text = "Understood, sir."
                     else:
-                        if not anthropic_client:
-                            response_text = "API key not configured."
-                        else:
-                            response_text = await generate_response(
-                                user_text, anthropic_client, task_manager,
-                                cached_projects, history,
-                                last_response=last_jarvis_response,
-                                session_summary=session_summary,
-                            )
+                        response_text = await _llm(
+                            user_text, task_manager, cached_projects, history,
+                            last_response=last_jarvis_response,
+                            session_summary=session_summary,
+                        )
 
-                            # Check for action tags embedded in LLM response
-                            clean_response, embedded_action = extract_action(response_text)
-                            if embedded_action:
-                                log.info(f"LLM embedded action: {embedded_action}")
-                                response_text = clean_response
-                                # Ensure there's always something to speak
-                                if not response_text.strip():
-                                    action_type = embedded_action["action"]
-                                    if action_type == "prompt_project":
-                                        proj = embedded_action["target"].split("|||")[0].strip()
-                                        response_text = f"Connecting to {proj} now, sir."
-                                    elif action_type == "build":
-                                        response_text = "On it, sir."
-                                    elif action_type == "research":
-                                        response_text = "Looking into that now, sir."
-                                    else:
-                                        response_text = "Right away, sir."
+                        # Check for action tags embedded in LLM response
+                        clean_response, embedded_action = extract_action(response_text)
+                        if embedded_action:
+                            log.info(f"LLM embedded action: {embedded_action}")
+                            response_text = clean_response
+                            # Ensure there's always something to speak
+                            if not response_text.strip():
+                                action_type = embedded_action["action"]
+                                if action_type == "prompt_project":
+                                    proj = embedded_action["target"].split("|||")[0].strip()
+                                    response_text = f"Connecting to {proj} now, sir."
+                                elif action_type == "build":
+                                    response_text = "On it, sir."
+                                elif action_type == "research":
+                                    response_text = "Looking into that now, sir."
+                                else:
+                                    response_text = "Right away, sir."
 
                                 if embedded_action["action"] == "build":
                                     # Build in background — JARVIS stays conversational
@@ -2488,23 +2599,32 @@ async def voice_handler(ws: WebSocket):
                     await ws.send_json({"type": "status", "state": "idle"})
                     continue
 
-                tts = strip_markdown_for_tts(response_text)
-                await ws.send_json({"type": "status", "state": "speaking"})
                 _state["speaking"] = True
-                audio = await synthesize_speech(tts)
+                tts_text = strip_markdown_for_tts(response_text)
 
-                # Check again after awaiting TTS synthesis
-                if _state["cancel"] or _state["response_id"] != my_response_id:
-                    log.info("Response cancelled after TTS synthesis")
-                    _state["speaking"] = False
-                    await ws.send_json({"type": "status", "state": "idle"})
-                    continue
-
-                if audio:
-                    await ws.send_json({"type": "audio", "data": base64.b64encode(audio).decode(), "text": response_text})
+                if FISH_API_KEY:
+                    await ws.send_json({"type": "status", "state": "speaking"})
+                    audio = await synthesize_speech(tts_text)
+                    # Check again after awaiting TTS synthesis
+                    if _state["cancel"] or _state["response_id"] != my_response_id:
+                        log.info("Response cancelled after TTS synthesis")
+                        _state["speaking"] = False
+                        await ws.send_json({"type": "status", "state": "idle"})
+                        continue
+                    if audio:
+                        await ws.send_json({"type": "audio", "data": base64.b64encode(audio).decode(), "text": response_text})
+                    else:
+                        # Fish failed — browser speaks
+                        await ws.send_json({"type": "speak", "text": tts_text})
                 else:
-                    await ws.send_json({"type": "text", "text": response_text})
-                    await ws.send_json({"type": "status", "state": "idle"})
+                    # No Fish key — browser's built-in voice (free)
+                    if _state["cancel"] or _state["response_id"] != my_response_id:
+                        _state["speaking"] = False
+                        await ws.send_json({"type": "status", "state": "idle"})
+                        continue
+                    await ws.send_json({"type": "status", "state": "speaking"})
+                    await ws.send_json({"type": "speak", "text": tts_text})
+
                 _state["speaking"] = False
                 log.info(f"JARVIS: {response_text}")
                 last_jarvis_response = response_text

@@ -206,3 +206,53 @@ export function createAudioPlayer(): AudioPlayer {
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Browser Speech Synthesis (free fallback when no Fish Audio key)
+// ---------------------------------------------------------------------------
+
+let _browserSpeaking = false;
+let _browserSpeakCallback: (() => void) | null = null;
+
+export function browserSpeak(text: string, onDone: () => void): void {
+  // Cancel anything currently being spoken
+  window.speechSynthesis.cancel();
+  _browserSpeaking = true;
+  _browserSpeakCallback = onDone;
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 0.92;
+  utter.pitch = 0.85;
+  utter.volume = 1.0;
+
+  // Pick best available English voice
+  const voices = window.speechSynthesis.getVoices();
+  const pick =
+    voices.find(v => v.lang === "en-GB" && v.name.toLowerCase().includes("google")) ||
+    voices.find(v => v.lang === "en-GB") ||
+    voices.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("google")) ||
+    voices.find(v => v.lang.startsWith("en")) ||
+    null;
+  if (pick) utter.voice = pick;
+
+  utter.onend = () => {
+    if (_browserSpeaking) {
+      _browserSpeaking = false;
+      _browserSpeakCallback?.();
+      _browserSpeakCallback = null;
+    }
+  };
+  utter.onerror = () => {
+    _browserSpeaking = false;
+    _browserSpeakCallback?.();
+    _browserSpeakCallback = null;
+  };
+
+  window.speechSynthesis.speak(utter);
+}
+
+export function browserSpeakStop(): void {
+  window.speechSynthesis.cancel();
+  _browserSpeaking = false;
+  _browserSpeakCallback = null;
+}
