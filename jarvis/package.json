@@ -1,0 +1,44 @@
+{
+  "name": "jarvis",
+  "version": "0.1.0",
+  "description": "Jarvis — personal voice assistant desktop app",
+  "main": "main/main.js",
+  "author": "Jarvis Project",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win portable",
+    "dist:all": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^34.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.jarvis.assistant",
+    "productName": "Jarvis",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main/**/*",
+      "renderer/**/*",
+      "shared/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Jarvis-${version}-portable.exe",
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "Jarvis-${version}-portable.exe"
+    }
+  }
+}
