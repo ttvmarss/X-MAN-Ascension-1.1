@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>Jarvis</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="orb-canvas" aria-hidden="true"></canvas>
+
+    <button id="mic-toggle" type="button" aria-label="Mute microphone" title="Mute microphone">
+      <svg id="mic-icon-on" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+        <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/>
+      </svg>
+      <svg id="mic-icon-off" class="hidden" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+        <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5a3 3 0 0 0-5.88-.87l5.86 5.86zM4.27 3 3 4.27l6.01 6.01V11a3 3 0 0 0 3.58 2.95l2.03 2.03A5 5 0 0 1 7 11H5a7 7 0 0 0 6 6.92V21h2v-2.09l4.73 4.73L21 19.73 4.27 3z"/>
+      </svg>
+    </button>
+
+    <div id="status" class="sr-only" role="status" aria-live="polite"></div>
+  </div>
+
+  <script src="orb.js"></script>
+  <script src="voice.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

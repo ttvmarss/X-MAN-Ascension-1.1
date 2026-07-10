@@ -1,0 +1,7 @@
+node_modules/
+dist/win-unpacked/
+dist/*.7z
+dist/builder-debug.yml
+dist/*.exe
+*.log
+.DS_Store
