@@ -1,0 +1,9 @@
+[000.0-004.3] Jarvis, I want to give you the ability to 3D model, not just research ideas, but
+[004.3-007.0] but actually help--to-design prototypes.
+[007.0-010.0] Is this even possible with help with your current hardware?
+[010.0-017.2] No, not--not realistically, I'm already rationing VRAM between browser automation, vision and language reasoning,
+[017.2-022.4] add a 3D engine to that mix and something doesn't just slow down, it stops working entirely.
+[022.4-027.4] You want to actually work in CAD with me, not just think through designs but, have me help you model,
+[027.5-029.8] then you need new hardware, full start.
+[029.8-031.8] Well, that's going to be expensive.
+[031.8-033.7] Follow to see if, if we can make this happen.

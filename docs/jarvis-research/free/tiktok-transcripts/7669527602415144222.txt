@@ -1,0 +1,3 @@
+[000.0-003.1] Everyone said letting my AI rewrite itself as a huge mistake.
+[003.1-005.6] So when Jarvis started--started editing his own code,
+[005.6-008.2] I made sure he couldn't finish without my fingerprint.

@@ -6,6 +6,7 @@ Research compiled from the public site [jarvis.driftworksstudios.com](https://ja
 
 | Doc | Purpose |
 |-----|---------|
+| [VIDEO-INTEL.md](./VIDEO-INTEL.md) | TikTok downloads, dialogue, on-screen module names, stack evidence |
 | [FREE-MATERIALS.md](./FREE-MATERIALS.md) | **What is free vs paid** + archived free Blueprint preview |
 | [free/](./free/) | Free PDF preview, how-to guide text/HTML |
 | [SITE-AUDIT.md](./SITE-AUDIT.md) | Full crawl of the marketing site, pages, APIs, demos |
