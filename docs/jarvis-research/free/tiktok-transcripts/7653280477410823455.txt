@@ -1,0 +1,5 @@
+[000.0-001.5] A stranger tried to use my computer.
+[001.5-005.4] Jarvis caught him in four seconds, then wouldn't stand down until I approved it.
+[005.4-010.0] Z
+[010.0-020.0] Jarvis stand down
+[020.0-023.7] He caught
