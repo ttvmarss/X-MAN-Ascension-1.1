@@ -1,0 +1,53 @@
+{
+  "source": "https://jarvis.driftworksstudios.com",
+  "brand": "ManinaLabs",
+  "publisher": "DriftWorks Studios",
+  "founder": "Sam Manina",
+  "researched_at": "2026-08-24",
+  "assistant_runtime": {
+    "os": "Windows 11",
+    "language": "Python 3.10|3.11",
+    "backend": "Flask + Socket.IO",
+    "brain": "Anthropic Claude API (strong + cheap models)",
+    "stt": "Whisper (local)",
+    "tts": "Coqui XTTS (voice clone) + Windows fallback",
+    "wake_word": "JARVIS",
+    "memory": ["ChromaDB", "SQLite", "Markdown vault"],
+    "ui": "Browser holographic orb HUD over websocket",
+    "tools": "~50 skill functions + dispatcher",
+    "builder": "Claude Code CLI",
+    "gpu": "NVIDIA CUDA 8GB+ VRAM recommended for XTTS"
+  },
+  "kits": [
+    {"key": "blueprint", "price_sale": 29, "price_list": 49},
+    {"key": "starter", "price_sale": 79, "price_list": 99},
+    {"key": "creator", "price_sale": 249, "price_list": 297},
+    {"key": "founder", "price_sale": 999, "price_list": 1299},
+    {"key": "custom", "price_from": 10000, "application_only": true}
+  ],
+  "runtime_prereqs": ["Claude Pro ~$20/mo", "Anthropic API tokens"],
+  "demo_youtube_ids": [
+    "Ota84LrRqLA",
+    "2zyPY_LPVcg",
+    "3rUS7Q7mNXQ",
+    "REWb9jZ2QQk",
+    "MuiCM6wEqtQ",
+    "nVLhx0fh1xQ"
+  ],
+  "integrations_named": [
+    "Chrome",
+    "Word",
+    "Excel",
+    "Outlook",
+    "Spotify",
+    "WolframAlpha",
+    "weather",
+    "news",
+    "web search",
+    "reminders",
+    "calendar",
+    "system status",
+    "security monitor"
+  ],
+  "pages": ["/", "/how-to-build-your-own-jarvis", "/get-access", "/dashboard", "/privacy", "/terms"]
+}
