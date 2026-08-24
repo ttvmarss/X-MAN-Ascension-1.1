@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How to Build Your Own J.A.R.V.I.S. — Step-by-Step Guide | ManinaLabs</title>
+<meta name="description" content="A practical guide to building your own J.A.R.V.I.S. — the AI brain, voice, interface, memory, and automation you need, and how to put them together into a personal AI assistant." />
+<link rel="canonical" href="https://jarvis.driftworksstudios.com/how-to-build-your-own-jarvis" />
+<meta name="robots" content="index, follow" />
+<meta name="theme-color" content="#05080f" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="ManinaLabs" />
+<meta property="og:title" content="How to Build Your Own J.A.R.V.I.S. — Step-by-Step Guide" />
+<meta property="og:description" content="The AI brain, voice, interface, memory, and automation you need to build your own J.A.R.V.I.S. — and how to put them together." />
+<meta property="og:url" content="https://jarvis.driftworksstudios.com/how-to-build-your-own-jarvis" />
+<meta property="og:image" content="https://jarvis.driftworksstudios.com/assets/sam-manina.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="How to Build Your Own J.A.R.V.I.S. — Step-by-Step Guide" />
+<meta name="twitter:description" content="The AI brain, voice, interface, memory, and automation you need to build your own J.A.R.V.I.S." />
+<meta name="twitter:image" content="https://jarvis.driftworksstudios.com/assets/sam-manina.png" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Article","headline":"How to Build Your Own J.A.R.V.I.S. — Step-by-Step Guide","description":"A practical guide to building your own J.A.R.V.I.S. — the AI brain, voice, interface, memory, and automation you need, and how to put them together.","author":{"@type":"Person","name":"Sam Manina"},"publisher":{"@type":"Organization","name":"ManinaLabs","alternateName":"Manina Labs"},"datePublished":"2026-06-15","mainEntityOfPage":"https://jarvis.driftworksstudios.com/how-to-build-your-own-jarvis","image":"https://jarvis.driftworksstudios.com/assets/sam-manina.png"}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/site.css" />
+<style>
+  body{ background:radial-gradient(120% 70% at 50% 0%, #0a1426 0%, #05080f 50%, #03060d 100%); }
+  .jv-site{ min-height:100vh; }
+  .doc{ max-width:800px; margin:0 auto; padding:48px 22px 90px; }
+  .doc-top{ display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:34px; }
+  .doc-top .brand{ display:flex; align-items:center; gap:10px; }
+  .back-btn{ min-height:0; padding:10px 16px; font-size:11px; letter-spacing:.14em; }
+  .doc-card{ padding:clamp(26px,4vw,46px); }
+  .doc .eyebrow{ display:inline-flex; margin-bottom:14px; }
+  .doc h1{ font-family:var(--font-display); font-size:clamp(28px,4.6vw,40px); font-weight:700; letter-spacing:-.02em; line-height:1.12; margin:0 0 14px; }
+  .doc .lede{ font-size:17px; line-height:1.7; color:var(--txt); margin:0 0 8px; }
+  .doc .byline{ font-family:var(--font-mono); font-size:12px; color:var(--txt-dim); margin:0 0 28px; }
+  .doc h2{ font-family:var(--font-display); font-size:22px; font-weight:600; color:#fff; margin:36px 0 12px; }
+  .doc h3{ font-family:var(--font-display); font-size:17px; font-weight:600; color:var(--cyan-soft); margin:24px 0 8px; }
+  .doc p, .doc li{ font-size:15.5px; line-height:1.75; color:var(--txt); }
+  .doc p{ margin:0 0 15px; }
+  .doc ul, .doc ol{ margin:0 0 15px; padding-left:22px; }
+  .doc li{ margin:0 0 9px; }
+  .doc a{ color:var(--cyan-soft); }
+  .doc strong{ color:#fff; font-weight:600; }
+  .step{ display:flex; gap:14px; padding:16px 0; border-top:1px solid var(--line); }
+  .step:first-of-type{ border-top:none; }
+  .step .n{ flex:0 0 auto; width:30px; height:30px; border-radius:8px; display:grid; place-items:center; font-family:var(--font-mono); font-weight:700; font-size:13px; color:#021018; background:linear-gradient(180deg,var(--cyan-soft),var(--cyan)); }
+  .step .body h3{ margin:2px 0 6px; color:#fff; }
+  .step .body p{ margin:0; color:var(--txt-dim); font-size:14.5px; }
+  .cta{ margin:34px 0 6px; padding:22px 22px; border-radius:14px; border:1px solid var(--line-strong); background:var(--glow-soft); box-shadow:0 0 40px var(--glow-soft); text-align:center; }
+  .cta h2{ margin:0 0 8px; color:#fff; }
+  .cta p{ color:var(--txt-dim); font-size:14.5px; margin:0 0 16px; }
+  .cta .btn{ text-decoration:none; }
+  .key{ list-style:none; padding:0; margin:0 0 15px; }
+  .key li{ padding-left:24px; position:relative; }
+  .key li::before{ content:"›"; position:absolute; left:6px; color:var(--cyan); font-weight:700; }
+</style>
+</head>
+<body>
+<main class="jv-site">
+  <div class="doc">
+    <div class="doc-top">
+      <a class="btn btn--ghost back-btn" href="/">&larr; Back to J.A.R.V.I.S.</a>
+      <div class="brand"><span class="gem"></span> J.A.R.V.I.S.</div>
+    </div>
+
+    <div class="doc-card glass">
+      <span class="eyebrow">Guide</span>
+      <h1>How to Build Your Own J.A.R.V.I.S.</h1>
+      <p class="lede">Tony Stark had a team of engineers. You have large language models, open-source tools, and a weekend. Here's a practical, honest walkthrough of what it actually takes to build your own J.A.R.V.I.S. — a voice-driven personal AI assistant with memory, a real interface, and the ability to do things on your computer.</p>
+      <p class="byline">By Sam Manina · ManinaLabs</p>
+
+      <h2>What is a J.A.R.V.I.S., really?</h2>
+      <p>Strip away the movie magic and J.A.R.V.I.S. is a few well-known technologies wired together thoughtfully: a <strong>language model</strong> for reasoning, <strong>speech recognition</strong> so it can hear you, <strong>speech synthesis</strong> so it can talk back, a <strong>user interface</strong> so it feels alive, <strong>memory</strong> so it remembers you, and <strong>tools</strong> so it can actually <em>do</em> things — control apps, search the web, run automations. The hard part isn't any single piece; it's making them work together into something that feels seamless and personal.</p>
+      <p>This guide breaks down each building block, gives you a realistic sense of the difficulty, and shows you the fastest path from zero to a working assistant.</p>
+
+      <h2>What you'll need before you start</h2>
+      <ul class="key">
+        <li><strong>An AI provider or model.</strong> An API key from Anthropic (Claude) or OpenAI, or a local model if you have the hardware.</li>
+        <li><strong>A computer.</strong> A normal PC is fine for a text/voice assistant. A premium cloned voice and local models want a GPU (roughly 8GB+ VRAM).</li>
+        <li><strong>Some willingness to build.</strong> You don't need to be a senior engineer — but you'll be assembling parts, not flipping a switch. Templates and guidance make this far more approachable.</li>
+      </ul>
+
+      <h2>The building blocks of a J.A.R.V.I.S.</h2>
+
+      <div class="step"><div class="n">1</div><div class="body"><h3>The brain (a language model)</h3><p>This is the reasoning core. You send it what the user said (plus context and memory) and it decides what to say or do. Claude and GPT are the usual choices via API; advanced builders run local models for privacy and speed.</p></div></div>
+      <div class="step"><div class="n">2</div><div class="body"><h3>Ears (speech-to-text)</h3><p>So it can hear you. Whisper-style speech recognition turns your microphone audio into text the brain can read. Pair it with a wake word ("Jarvis…") so it only listens when you want.</p></div></div>
+      <div class="step"><div class="n">3</div><div class="body"><h3>Voice (text-to-speech)</h3><p>So it can talk back — ideally in a distinctive voice, not a robotic one. A cloned or premium voice model is what makes an assistant feel like <em>your</em> J.A.R.V.I.S. rather than a generic narrator.</p></div></div>
+      <div class="step"><div class="n">4</div><div class="body"><h3>The interface</h3><p>A living, holographic-style UI — a reactive orb, telemetry, captions — is what turns a script into something that feels alive. This is presentation, but it's a huge part of the J.A.R.V.I.S. feeling.</p></div></div>
+      <div class="step"><div class="n">5</div><div class="body"><h3>Memory</h3><p>So it remembers your preferences, projects, and past conversations across sessions. This is the difference between a chatbot and an assistant that actually knows you.</p></div></div>
+      <div class="step"><div class="n">6</div><div class="body"><h3>Tools &amp; automation</h3><p>The part that makes it useful: controlling apps, opening files, searching the web, checking the weather, managing reminders and calendars. You give the brain a set of "tools" it can choose to call.</p></div></div>
+      <div class="step"><div class="n">7</div><div class="body"><h3>The glue</h3><p>A small backend that ties it together — routing audio in, the model in the middle, voice and UI out — running as a loop you can talk to naturally. This orchestration is where most of the real engineering lives.</p></div></div>
+
+      <h2>Step-by-step: from zero to talking</h2>
+      <ol>
+        <li><strong>Start with text.</strong> Get a basic loop working: type a message, send it to the model, print the reply. This proves your brain and API key work.</li>
+        <li><strong>Add a voice out.</strong> Pipe the model's reply through text-to-speech. Now it talks.</li>
+        <li><strong>Add a voice in.</strong> Capture your mic, transcribe with speech recognition, feed it to the brain. Now you can have a conversation.</li>
+        <li><strong>Add a wake word.</strong> Have it listen passively and only engage when it hears its name, so it's hands-free.</li>
+        <li><strong>Give it a face.</strong> Build (or drop in) a UI so there's something to look at while it thinks and speaks.</li>
+        <li><strong>Give it memory.</strong> Store and recall facts about you so context survives between sessions.</li>
+        <li><strong>Give it tools.</strong> Add capabilities one at a time — web search, app control, reminders — and let the brain decide when to use them.</li>
+      </ol>
+
+      <h2>How hard is it, honestly?</h2>
+      <p>A simple talking assistant is a weekend project. A polished J.A.R.V.I.S. with a cloned voice, a reactive interface, persistent memory, and a dozen working tools is a real build — the kind of thing that takes weeks of trial and error if you start from a blank page. The biggest time sinks are usually the orchestration (making all the parts cooperate), the voice pipeline, and getting the interface to feel alive.</p>
+      <p>That's exactly why most people don't start from scratch. With the right framework, templates, and architecture in hand, you skip the dead ends and spend your time customizing instead of debugging.</p>
+
+      <div class="cta">
+        <h2>Skip the dead ends</h2>
+        <p>I built my own J.A.R.V.I.S. and packaged the framework, UI, templates, and step-by-step guidance so you can build yours without starting from zero. From a starter blueprint to a full kit with a premium voice model and 1:1 coaching.</p>
+        <a class="btn btn--primary" href="/get-access">See the kits</a>
+      </div>
+
+      <h2>Frequently asked</h2>
+      <h3>Do I need to be a programmer?</h3>
+      <p>It helps, but it isn't required if you follow a guided approach. There's building involved — you're creating your own assistant — but templates and clear documentation make it approachable for motivated non-developers.</p>
+      <h3>Is this just ChatGPT with a voice?</h3>
+      <p>No. A J.A.R.V.I.S. is yours — it remembers you, runs on your machine, controls your tools, speaks in a voice you choose, and behaves the way you design it. The language model is one ingredient, not the whole thing.</p>
+      <h3>What's the fastest way to get there?</h3>
+      <p>Learn from someone who's already built one. <a href="/get-access">The ManinaLabs kits</a> give you the architecture and assets so you can go straight to building your own version.</p>
+    </div>
+  </div>
+</main>
+<script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "d9f168d7f22f452080154b05e17fd94f"}'></script>
+</body>
+</html>

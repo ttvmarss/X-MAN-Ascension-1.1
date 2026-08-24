@@ -6,6 +6,8 @@ Research compiled from the public site [jarvis.driftworksstudios.com](https://ja
 
 | Doc | Purpose |
 |-----|---------|
+| [FREE-MATERIALS.md](./FREE-MATERIALS.md) | **What is free vs paid** + archived free Blueprint preview |
+| [free/](./free/) | Free PDF preview, how-to guide text/HTML |
 | [SITE-AUDIT.md](./SITE-AUDIT.md) | Full crawl of the marketing site, pages, APIs, demos |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Target system architecture (from free Blueprint Ch.1) |
 | [TOOLING.md](./TOOLING.md) | Every tool / service / dependency to acquire |
